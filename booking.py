@@ -10,60 +10,33 @@ random.seed(1234)
 
 minimizeCost = False
 
-meeting_sizes = [4, 5, 2, 10, 4, 2, 4]
-meeting_needs_piano = [1, 0, 0, 0, 0, 1, 0]
-
-meeting_times = [
-    [0],    # meeting 1
-    [1],    # meeting 2
-    [1, 2, 3, 4], # meeting 3
-    [3],    # meeting 4
-    [4],    # meeting 5
-    [4, 5], # meeting 6
-    [5, 6]  # meeting 7
-]
-
-meeting_makeNoise = [0, 0, 1, 1, 0, 0, 0]
-meeting_needQuiet = [0, 1, 0, 0, 0, 0, 0]
-
-room_cap = [2, 10, 6]
-room_has_piano = [0, 1, 0]
-room_names = "ABC"
-
 # We have 3 rooms (A, B and C)
 # Use edge to mark which room is next to which
-g_rooms = networkx.Graph()
-for rm in list(room_names):
-    g_rooms.add_node(rm)
+#g_rooms = networkx.Graph()
+#for rm in list(room_names):
+#    g_rooms.add_node(rm)
 
-g_rooms.add_edge("A", "B")
-g_rooms.add_edge("B", "C")
-
-num_meetings = len(meeting_sizes)
-num_timeslots = 10
-num_rooms = len(room_cap)
+#g_rooms.add_edge("A", "B")
+#g_rooms.add_edge("B", "C")
 
 
-def genRandomInput():
-    global room_cap, room_names, meeting_sizes, meeting_times, num_rooms, num_meetings, \
-        room_has_piano, meeting_needs_piano
-
-    num_rooms = 20
-    num_meetings = 50
-
+def genRandomInput(num_rooms=20, num_meetings=70, num_timeslots=10):
     room_cap = []
     room_has_piano = []
-    for i in range(num_rooms):
-        room_cap.append(random.randint(8, 12))
-        rn = random.randint(1, 100)
-        if rn >= 70:
-            room_has_piano.append(1)
-        else:
-            room_has_piano.append(0)
+    meeting_needs_piano = []
 
     room_names = string.ascii_uppercase[0:num_rooms]
 
+    for i in range(num_rooms):
+        cap = random.randint(8, 12)
+        room_cap.append(cap)
+
     max_cap = max(room_cap)
+    for i in range(num_rooms):
+        if room_cap[i] >= (max_cap - 3):
+            room_has_piano.append(1)
+        else:
+            room_has_piano.append(0)
 
     meeting_sizes = []
     meeting_times = []
@@ -78,7 +51,7 @@ def genRandomInput():
         else:
             duration = 3
 
-        if rn >= 95:
+        if random.randint(1, 100) >= 80:
             meeting_needs_piano.append(1)
         else:
             meeting_needs_piano.append(0)
@@ -86,86 +59,137 @@ def genRandomInput():
         end_time = min(duration + start_time - 1, num_timeslots - 1)
         meeting_times.append(list(range(start_time, end_time+1)))
 
+    return room_cap, room_names, meeting_sizes, meeting_times, room_has_piano, meeting_needs_piano
 
-genRandomInput()
 
+def genDataLists(num_meetings, num_timeslots, num_rooms, meeting_sizes, meeting_times):
+    all_meetings = range(num_meetings)
+    all_timeslots = range(num_timeslots)
+    all_rooms = range(num_rooms)
 
-all_meetings = range(num_meetings)
-all_timeslots = range(num_timeslots)
-all_rooms = range(num_rooms)
-
-print("Total # of meetings: {}".format(num_meetings))
-print()
-
-timeslot_requests = {}
-for t in all_timeslots:
-    timeslot_requests[t] = list()
-
-for m in all_meetings:
-    print("Meeting {m}: size={size}, timeslots={ts}".format(m=m,
-                                                            size=meeting_sizes[m], ts=str(meeting_times[m])))
-    for t in meeting_times[m]:
-        timeslot_requests[t].append(m)
-
-print("---------------\n")
-for r in all_rooms:
-    print("Room {rn}: cap={cap}".format(rn=room_names[r], cap=room_cap[r]))
-
-print("---------------\n")
-for t in all_timeslots:
-    print("Time {t}: {ms}".format(t=t, ms=str(timeslot_requests[t])))
-
-print("---------------\n")
-
-# Create the variables
-model = cp_model.CpModel()
-bookings = {}
-for m in all_meetings:
+    timeslot_requests = {}
     for t in all_timeslots:
-        for r in all_rooms:
-            # bookings[(m, t, r)] = 1 if meeting m has booked room r at time t
-            bookings[(m, t, r)] = model.NewBoolVar('booking_mtg-{}_time-{}_room-{}'.format(m+1, t, room_names[r]))
+        timeslot_requests[t] = list()
 
-#
-# Conditions
-#
+    for m in all_meetings:
+        for t in meeting_times[m]:
+            timeslot_requests[t].append(m)
 
-# A meeting must happen at its specified time slots
-for m in all_meetings:
+    return all_meetings, all_timeslots, all_rooms, timeslot_requests
+
+
+def printConfig(all_rooms, room_names, room_cap, all_timeslots, timeslot_requests,
+                all_meetings, meeting_needs_piano):
+    print("---------------\n")
+    for m in all_meetings:
+        piano = ''
+        if meeting_needs_piano[m] == 1:
+            piano = '(P)'
+        print("Meeting {m}: size={size}{piano}, timeslots={ts}".format(m=m, piano=piano,
+                                                                size=meeting_sizes[m], ts=str(meeting_times[m])))
+        for t in meeting_times[m]:
+            timeslot_requests[t].append(m)
+
+    print("---------------\n")
+    for r in all_rooms:
+        piano = ''
+        if room_has_piano[r] == 1:
+            piano = '(P)'
+        print("Room {rn}: cap={cap} {piano}".format(rn=room_names[r], cap=room_cap[r], piano=piano))
+
+    print("---------------\n")
     for t in all_timeslots:
-        if t in meeting_times[m]:
-            model.Add(sum(bookings[(m, t, r)] for r in all_rooms) == 1)
-        else:
-            # For other timeslots, don't assign the meeting to any room
+        print("Time {t}: {ms}".format(t=t, ms=str(timeslot_requests[t])))
+
+    print("---------------\n")
+
+
+def passBasicCheck(all_timeslots, all_meetings, meeting_times, num_rooms):
+    for t in all_timeslots:
+        meeting_request = 0
+        for m in all_meetings:
+            if t in meeting_times[m]:
+                meeting_request += 1
+
+        if meeting_request > num_rooms:
+            print('Too many meetings (total: {}) are booked at time {}'.format(meeting_request, t))
+            return False
+
+    return True
+
+
+def createBookingModel(all_meetings, all_timeslots, all_rooms, meeting_times, ignore_piano=False):
+    model = cp_model.CpModel()
+
+    bookings = {}
+    for m in all_meetings:
+        for t in all_timeslots:
             for r in all_rooms:
-                model.Add(bookings[(m, t, r)] == 0)
+                # bookings[(m, t, r)] = 1 if meeting m has booked room r at time t
+                bookings[(m, t, r)] = model.NewBoolVar('mtg-{}_time-{}_room-{}'.format(m + 1, t, room_names[r]))
 
-# No two meetings can share the same room
-for t in all_timeslots:
-    for r in all_rooms:
-        model.Add(sum(bookings[(m, t, r)] for m in all_meetings) <= 1)
+    #
+    # Conditions
+    #
 
-# The room capacity must fit the meeting size
-for m in all_meetings:
-    for t in meeting_times[m]:
+    # A meeting must happen at its specified time slots
+    for m in all_meetings:
+        for t in all_timeslots:
+            if t in meeting_times[m]:
+                # if meeting m needs timeslot t, we need to book exactly one room at timeslot t
+                model.Add(sum(bookings[(m, t, r)] for r in all_rooms) == 1)
+            else:
+                # Don't assign meeting m to any room
+                for r in all_rooms:
+                    model.Add(bookings[(m, t, r)] == 0)
+
+    # No two meetings can share the same room
+    for t in all_timeslots:
         for r in all_rooms:
-            if room_cap[r] < meeting_sizes[m]:
-                model.Add(bookings[(m, t, r)] == 0)
+            # Each room can be assigned only to one meeting
+            model.Add(sum(bookings[(m, t, r)] for m in all_meetings) <= 1)
 
-# A meeting must use the same room in all its required timeslots (e.g. if meeting 1 span two timeslots, then ...)
-for m in all_meetings:
-    for r in all_rooms:
-        for i in range(len(meeting_times[m]) - 1):
-            # For room r, if the current timeslot if TRUE, then the next one must be true too
-            model.Add(bookings[(m, meeting_times[m][i+1], r)] == True).OnlyEnforceIf(bookings[(m, meeting_times[m][i], r)])
-
-# A room which requires piano must use the suitable room
-if True:
+    # The room capacity must fit the meeting size
     for m in all_meetings:
         for t in meeting_times[m]:
             for r in all_rooms:
-                if meeting_needs_piano[m] == 1 and room_has_piano[r] == 0:
-                    model.Add(bookings[(m, t, r)] == 0)  # if the room as no piano, don't assign
+                if room_cap[r] < meeting_sizes[m]:
+                    model.Add(bookings[(m, t, r)] == 0)
+
+    # A meeting must use the same room in all its required timeslots (e.g. if meeting 1 span two timeslots, then ...)
+    for m in all_meetings:
+        for r in all_rooms:
+            for i in range(len(meeting_times[m]) - 1):
+                # For room r, if the current timeslot is TRUE, then the next one must be true too
+                model.Add(bookings[(m, meeting_times[m][i + 1], r)] == True).OnlyEnforceIf(
+                    bookings[(m, meeting_times[m][i], r)])
+
+    if not ignore_piano:
+        # A room which requires piano must use a room that has a piano
+        for m in all_meetings:
+            for t in meeting_times[m]:
+                for r in all_rooms:
+                    if meeting_needs_piano[m] == 1 and room_has_piano[r] == 0:
+                        model.Add(bookings[(m, t, r)] == 0)  # if the room as no piano, don't assign
+
+    return model, bookings
+
+
+num_rooms = 22
+num_meetings = 110
+num_timeslots = 10
+
+room_cap, room_names, meeting_sizes, meeting_times, room_has_piano, meeting_needs_piano = \
+    genRandomInput(num_rooms, num_meetings, num_timeslots)
+
+all_meetings, all_timeslots, all_rooms, timeslot_requests = genDataLists(num_meetings, num_timeslots,
+                                                                         num_rooms, meeting_sizes, meeting_times)
+
+printConfig(all_rooms, room_names, room_cap, all_timeslots, timeslot_requests,
+            all_meetings, meeting_needs_piano)
+
+if not passBasicCheck(all_timeslots, all_meetings, meeting_times, num_rooms):
+    exit(1)
 
 if False:
     all_noisy_meetings = list(filter(lambda i: meeting_makeNoise[i] == 1, range(num_meetings)))
@@ -222,32 +246,6 @@ def print_one_solution(solver, bookings):
     print()
     print("Meeting allocated total: {}".format(len(booking_allocated)))
 
-def print_one_solution_v2(solver, bookings):
-    booking_allocated = set()
-    for t in all_timeslots:
-        print('Time %i' % t)
-        for m in all_meetings:
-            for r in all_rooms:
-                if solver.Value(bookings[(m, t, r)]):
-                    booking_allocated.add(m)
-                    extra = extra_rm = ''
-                    if meeting_needs_piano[m]:
-                        extra = ", needs piano"
-
-                    if room_has_piano[r]:
-                        extra_rm = 'P'
-
-                    if extra_rm:
-                        extra_rm = '(' + extra_rm + ')'
-                    print('  Mtg-{meeting} (size:{mtgsize}{extra}) assigned to room {room}{extra_rm} (cap:{roomcap}) '
-                          '(waste={waste})'.format(meeting=m + 1,
-                                                   mtgsize=meeting_sizes[m], extra=extra,
-                                                   room=room_names[r], roomcap=room_cap[r],
-                                                   waste=(room_cap[r] - meeting_sizes[m]),
-                                                   extra_rm=extra_rm))
-    print()
-    print("Meeting allocated total: {}".format(len(booking_allocated)))
-
 class PartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
     """Print intermediate solutions."""
 
@@ -272,18 +270,26 @@ solver.parameters.linearization_level = 0
 
 start_time = datetime.now()
 print("start at " + str(start_time))
-minimizeCost = True
 
 if False:
     # Display the first five solutions.
     a_few_solutions = range(1)
     solution_printer = PartialSolutionPrinter(bookings, a_few_solutions)
     solver.SearchForAllSolutions(model, solution_printer)
-else:
-    # Minimize room cap wastage
-    #model.Minimize(sum((room_cap[r] - meeting_sizes[m]) * bookings[(m, t, r)]
-    #                   for m in all_meetings for t in all_timeslots for r in all_rooms))
 
+# Minimize room cap wastage
+#model.Minimize(sum((room_cap[r] - meeting_sizes[m]) * bookings[(m, t, r)]
+#                   for m in all_meetings for t in all_timeslots for r in all_rooms))
+
+model, bookings = createBookingModel(all_meetings, all_timeslots, all_rooms, meeting_times)
+status = solver.Solve(model)
+if solver.StatusName(status) != 'INFEASIBLE':
+    print_one_solution(solver, bookings)
+else:
+    print()
+    print("Solve returns: " + solver.StatusName(status))
+    print("Let's try ignoring piano")
+    model, bookings = createBookingModel(all_meetings, all_timeslots, all_rooms, meeting_times, ignore_piano=True)
     status = solver.Solve(model)
     if solver.StatusName(status) != 'INFEASIBLE':
         print_one_solution(solver, bookings)
