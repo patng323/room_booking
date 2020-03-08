@@ -76,7 +76,6 @@ def createBookingModel(location, rooms, meetings, ignore_piano=False):
         for t in location.timeslots:
             for r in rooms:
                 # bookings[id(m, t, r] = 1 if meeting m has booked room r at time t
-                print("Add var: {}".format(getid(m, t, r)))
                 bookings[getid(m, t, r)] = model.NewBoolVar('{}'.format(getid(m, t, r)))
 
     #
@@ -112,7 +111,7 @@ def createBookingModel(location, rooms, meetings, ignore_piano=False):
         for r in rooms:
             for i in range(len(m.meeting_times) - 1):
                 # For room r, if the current timeslot is TRUE, then the next one must be true too
-                model.Add(bookings[getid(m, m.meeting_times[i + 1], r)]).OnlyEnforceIf(
+                model.Add(bookings[getid(m, m.meeting_times[i + 1], r)] == True).OnlyEnforceIf(
                     bookings[getid(m, m.meeting_times[i], r)])
 
     if not ignore_piano:
@@ -232,7 +231,7 @@ if False:
 model, bookings = createBookingModel(location, rooms, meetings)
 status = solver.Solve(model)
 if solver.StatusName(status) != 'INFEASIBLE':
-    print_one_solution(solver, bookings)
+    print_one_solution(solver, bookings, location, rooms, meetings)
 else:
     print()
     print("Solve returns: " + solver.StatusName(status))
@@ -240,7 +239,7 @@ else:
     model, bookings = createBookingModel(location, rooms, meetings, ignore_piano=True)
     status = solver.Solve(model)
     if solver.StatusName(status) != 'INFEASIBLE':
-        print_one_solution(solver, bookings)
+        print_one_solution(solver, bookings, location, rooms, meetings)
 
 end_time = datetime.now()
 
