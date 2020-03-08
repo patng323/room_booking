@@ -4,7 +4,7 @@ import string
 from datetime import datetime
 from rooms import Rooms
 from meetings import Meetings
-from location import Location
+from bookingManager import BookingManager
 from collections import defaultdict
 from ortools.sat.python import cp_model
 
@@ -22,12 +22,12 @@ minimizeCost = False
 #g_rooms.add_edge("B", "C")
 
 
-location = Location(name="Truth", num_timeslots=10)
-location.genRandomInput(num_rooms=22, num_meetings=3)
+manager = BookingManager(name="Truth", num_timeslots=10)
+manager.genRandomInput(num_rooms=22, num_meetings=3)
 
-location.printConfig()
+manager.printConfig()
 
-if not location.passBasicCheck():
+if not manager.passBasicCheck():
     exit(1)
 
 if False:
@@ -87,18 +87,18 @@ if False:
 #model.Minimize(sum((r.room_cap - m.size) * bookings[(m.name, t, r.name)]
 #                   for m in meetings for t in all_timeslots for r in rooms))
 
-model, bookings = location.createBookingModel()
+model, bookings = manager.createBookingModel()
 status = solver.Solve(model)
 if solver.StatusName(status) != 'INFEASIBLE':
-    location.print_one_solution(solver, bookings)
+    manager.print_one_solution(solver, bookings)
 else:
     print()
     print("Solve returns: " + solver.StatusName(status))
     print("Let's try ignoring piano")
-    model, bookings = location.createBookingModel(ignore_piano=True)
+    model, bookings = manager.createBookingModel(ignore_piano=True)
     status = solver.Solve(model)
     if solver.StatusName(status) != 'INFEASIBLE':
-        location.print_one_solution(solver, bookings)
+        manager.print_one_solution(solver, bookings)
 
 end_time = datetime.now()
 

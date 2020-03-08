@@ -6,10 +6,10 @@ from ortools.sat.python import cp_model
 
 
 def getid(meeting, timeslot, room):
-    return (meeting.name, timeslot, room.name)
+    return meeting.name, timeslot, room.name
 
 
-class Location:
+class BookingManager:
     def __init__(self, name, num_timeslots):
         self.name = name
         self.num_timeslots = num_timeslots
