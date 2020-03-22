@@ -87,15 +87,15 @@ def main():
     #model.Minimize(sum((r.room_cap - m.size) * bookings[(m.name, t, r.name)]
     #                   for m in meetings for t in all_timeslots for r in rooms))
 
-    status = manager.resolve()
+    status, solution = manager.resolve()
     if status != 'INFEASIBLE':
-        manager.print_one_solution()
+        manager.print_one_solution(solution)
     else:
         print()
         print("Solve returns: " + status)
         print("Let's try ignoring piano for all meetings")
         print()
-        status = manager.resolve(ignore_piano=True)
+        status, solution = manager.resolve(ignore_piano=True)
         if status != 'INFEASIBLE':
             print("It works without piano; so let's figure out which meeting is the culprit")
             print("We start by suppressing piano, starting with the smallest meeting")
@@ -106,9 +106,9 @@ def main():
                 mtg.suppress_piano()
                 print("Suppress piano for meeting {} and try allocating:".format(mtg.name))
                 try:
-                    status = manager.resolve()
+                    status, solution = manager.resolve()
                     if status != 'INFEASIBLE':
-                        manager.print_one_solution()
+                        manager.print_one_solution(solution)
                         break
                 finally:
                     mtg.suppress_piano(False)

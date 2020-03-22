@@ -26,7 +26,6 @@ class BookingManager:
         self._lastBookings = None
         self._lastStatus = None
 
-
     def genRandomInput(self, num_rooms, num_meetings):
         self.rooms = Rooms()
         self.rooms = Rooms()
@@ -95,8 +94,7 @@ class BookingManager:
 
         return self.CHECK_SUCCESS, None
 
-
-    def createBookingModel(self, allocations_to_follow=None, ignore_piano=False):
+    def createBookingModel(self, solution=None, ignore_piano=False):
         model = cp_model.CpModel()
     
         bookings = {}
@@ -111,11 +109,11 @@ class BookingManager:
         #
 
         # If we have a set of allocations we should follow, let's set condition for them first
-        if allocations_to_follow:
+        if solution:
             for t in self.timeslots:
                 for m in self.meetings:
                     for r in self.rooms:
-                        if allocations_to_follow[getid(m, t, r)]:
+                        if getid(m, t, r) in solution["alloc"]:
                             model.Add(bookings[getid(m, t, r)] == 1)
 
         # A meeting must happen at its specified time slots
@@ -168,23 +166,23 @@ class BookingManager:
 
         return res
 
-    def save_one_solution(self, solver, bookings):
-        allocations = {}
+    def save_one_solution(self):
+        allocations = []
         for t in self.timeslots:
             for m in self.meetings:
                 for r in self.rooms:
-                    if solver.Value(bookings[getid(m.name, t, r.name)]):
-                        allocations[getid(m.name, t, r.name)] = True
+                    if self._solver.Value(self._lastBookings[getid(m, t, r)]):
+                        allocations.append(getid(m, t, r))
 
-        return allocations
+        return {"alloc": allocations}
 
-    def print_one_solution(self):
+    def print_one_solution(self, solution):
         booking_allocated = set()
         for t in self.timeslots:
             print('Time %i' % t)
             for m in self.meetings:
                 for r in self.rooms:
-                    if self._solver.Value(self._lastBookings[getid(m, t, r)]):
+                    if getid(m, t, r) in solution["alloc"]:
                         booking_allocated.add(m.name)
                         extra_rm = mtg_times_info = final_info = ''
                         name = str(m.name)
@@ -224,11 +222,18 @@ class BookingManager:
         model, bookings = self.createBookingModel(ignore_piano=ignore_piano)
         self._lastBookings = bookings
         status = self._solver.Solve(model)
+        status = self._solver.StatusName(status)
         self._lastStatus = status
-        return self._solver.StatusName(status)
+
+        if status != 'INFEASIBLE':
+            solution = self.save_one_solution()
+        else:
+            solution = None
+
+        return status, solution
 
     def printStats(self):
-        print("Solve returns: " + self._solver.StatusName(self._lastStatus))
+        print("Solve returns: " + self._lastStatus)
         print()
         print('Statistics')
         print('  - conflicts       : %i' % self._solver.NumConflicts())
