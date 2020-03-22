@@ -10,6 +10,10 @@ def getid(meeting, timeslot, room):
 
 
 class BookingManager:
+    CHECK_SUCCESS = 1
+    CHECK_FAILED_MEETING_SIZE = -1
+    CHECK_FAILED_NO_OF_MEETINGS = -2
+
     def __init__(self, name, num_timeslots):
         self.name = name
         self.num_timeslots = num_timeslots
@@ -17,6 +21,11 @@ class BookingManager:
         self.rooms = None
         self.meetings = None
         self.__timeslot_requests = None
+        self._solver = cp_model.CpSolver()
+        self._solver.parameters.linearization_level = 0
+        self._lastBookings = None
+        self._lastStatus = None
+
 
     def genRandomInput(self, num_rooms, num_meetings):
         self.rooms = Rooms()
@@ -55,25 +64,39 @@ class BookingManager:
     
         print("---------------\n")
         for t in self.timeslots:
-            print("Time {t}: {ms}".format(t=t, ms=str(self.timeslot_requests[t])))
+            print("Time {t}: {ms} ({n})".format(t=t,
+                            ms=[self.meetings[m].name
+                                if not self.meetings[m].needs_piano
+                                else "{}P".format(self.meetings[m].name)
+                                for m in self.timeslot_requests[t]],
+                            n=len(self.timeslot_requests[t])))
     
         print("---------------\n")
 
+    def basicCheck(self):
+        room_caps_sorted = sorted([room.room_cap for room in self.rooms], reverse=True)
 
-    def passBasicCheck(self):
         for t in self.timeslots:
-            meeting_request = 0
-            for meeting in self.meetings:
-                if t in meeting.meeting_times:
-                    meeting_request += 1
-    
-            if meeting_request > self.rooms.num_rooms:
-                print('Too many meetings (total: {}) are booked at time {}'.format(meeting_request, t))
-                return False
-    
-        return True
+            tr = self.timeslot_requests[t]
+            if len(tr) > 0:
+                if len(tr) > self.rooms.num_rooms:
+                    print('Too many meetings (total: {}) are booked at time {}'.format(len(tr), t))
+                    return self.CHECK_FAILED_NO_OF_MEETINGS, {"timeslot": t}
 
-    def createBookingModel(self, ignore_piano=False):
+                sizes_sorted = sorted([(m, self.meetings[m].size) for m in tr], key=lambda x: x[1],
+                                      reverse=True)
+                for i in range(len(sizes_sorted)):
+                    if sizes_sorted[i][1] > room_caps_sorted[i]:
+                        print('Meeting {m} cannot find a fitting room (of size {s}) at time {t}'.format(
+                            m=sizes_sorted[i][0], s=sizes_sorted[i][1], t=t))
+                        print('Caps of all rooms: \n{}'.format(room_caps_sorted))
+                        print('Sizes of meeting at time {t}: \n{s}'.format(t=t, s=str([x[1] for x in sizes_sorted])))
+                        return self.CHECK_FAILED_MEETING_SIZE, {"timeslot": t}
+
+        return self.CHECK_SUCCESS, None
+
+
+    def createBookingModel(self, allocations_to_follow=None, ignore_piano=False):
         model = cp_model.CpModel()
     
         bookings = {}
@@ -86,7 +109,15 @@ class BookingManager:
         #
         # Conditions
         #
-    
+
+        # If we have a set of allocations we should follow, let's set condition for them first
+        if allocations_to_follow:
+            for t in self.timeslots:
+                for m in self.meetings:
+                    for r in self.rooms:
+                        if allocations_to_follow[getid(m, t, r)]:
+                            model.Add(bookings[getid(m, t, r)] == 1)
+
         # A meeting must happen at its specified time slots
         for m in self.meetings:
             for t in self.timeslots:
@@ -129,17 +160,41 @@ class BookingManager:
     
         return model, bookings
 
-    def print_one_solution(self, solver, bookings):
+    def meetings_which_need_piano(self):
+        res = []
+        for m in self.meetings:
+            if m.needs_piano:
+                res.append(m)
+
+        return res
+
+    def save_one_solution(self, solver, bookings):
+        allocations = {}
+        for t in self.timeslots:
+            for m in self.meetings:
+                for r in self.rooms:
+                    if solver.Value(bookings[getid(m.name, t, r.name)]):
+                        allocations[getid(m.name, t, r.name)] = True
+
+        return allocations
+
+    def print_one_solution(self):
         booking_allocated = set()
         for t in self.timeslots:
             print('Time %i' % t)
             for m in self.meetings:
                 for r in self.rooms:
-                    if solver.Value(bookings[(m.name, t, r.name)]):
+                    if self._solver.Value(self._lastBookings[getid(m, t, r)]):
                         booking_allocated.add(m.name)
-                        extra = extra_rm = mtg_times_info = ''
-                        if m.needs_piano:
-                            extra = ", piano"
+                        extra_rm = mtg_times_info = final_info = ''
+                        name = str(m.name)
+                        if m.piano_suppressed:
+                            name += "(PX)"
+                            final_info = " piano suppressed"
+                        elif m.needs_piano:
+                            name += "(P)"
+                            if not r.has_piano:
+                                final_info = " !! piano not fulfilled"
 
                         if r.has_piano:
                             extra_rm = 'P'
@@ -153,14 +208,31 @@ class BookingManager:
                         if extra_rm:
                             extra_rm = '(' + extra_rm + ')'
                         print(
-                            '  Mtg-{meeting}{mtg_times_info} (size:{mtgsize}{extra}) assigned to room {room}{extra_rm} (cap:{roomcap}) '
-                            '(waste={waste})'.format(meeting=m.name,
-                                                     mtgsize=m.size, extra=extra,
+                            '  Mtg-{meeting}{mtg_times_info} (size:{mtgsize}) assigned to {room}{extra_rm} (cap:{roomcap}) '
+                            '(waste={waste}) {final_info}'.format(meeting=name,
+                                                     mtgsize=m.size,
                                                      room=r.name, roomcap=r.room_cap,
                                                      waste=(r.room_cap - m.size),
                                                      extra_rm=extra_rm,
-                                                     mtg_times_info=mtg_times_info
+                                                     mtg_times_info=mtg_times_info,
+                                                     final_info=final_info
                                                      ))
         print()
         print("Meeting allocated total: {}".format(len(booking_allocated)))
+
+    def resolve(self, ignore_piano=False):
+        model, bookings = self.createBookingModel(ignore_piano=ignore_piano)
+        self._lastBookings = bookings
+        status = self._solver.Solve(model)
+        self._lastStatus = status
+        return self._solver.StatusName(status)
+
+    def printStats(self):
+        print("Solve returns: " + self._solver.StatusName(self._lastStatus))
+        print()
+        print('Statistics')
+        print('  - conflicts       : %i' % self._solver.NumConflicts())
+        print('  - branches        : %i' % self._solver.NumBranches())
+        print('  - wall time       : %f s' % self._solver.WallTime())
+        print()
 

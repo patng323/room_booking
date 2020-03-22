@@ -7,12 +7,32 @@ class Meeting:
     
     def __init__(self, name):
         self.__size = 0
-        self.needs_piano = False
+        self.__needs_piano = False
+        self.__piano_suppressed = False
+        self.suppressed = False
         self.__start_time = 0
         self.__duration = 0
         self.__end_time = 0
         self.__meeting_times = None
         self.name = name
+
+    def suppress_piano(self, suppress=True):
+        self.__piano_suppressed = suppress
+
+    @property
+    def piano_suppressed(self):
+        return self.__piano_suppressed
+
+    @property
+    def needs_piano(self):
+        if self.__piano_suppressed:
+            return False
+        else:
+            return self.__needs_piano
+
+    @needs_piano.setter
+    def needs_piano(self, val):
+        self.__needs_piano = val
 
     @property
     def size(self):
@@ -50,13 +70,13 @@ class Meetings:
     # - location (Truth building)
 
     def __init__(self, max_meeting_size):
-        self.meetings = []
+        self._meetings = []
         self.num_meetings = 0
         self.max_meeting_size = max_meeting_size
 
     def genRandomInput(self, num_meetings, num_timeslots):
         self.num_meetings = num_meetings
-        self.meetings = []
+        self._meetings = []
 
         for i in range(num_meetings):
             meeting = Meeting(name=i)
@@ -76,8 +96,14 @@ class Meetings:
                 duration = 3
 
             meeting.set_time(start_time, duration, num_timeslots-1, truncate=True)
-            self.meetings.append(meeting)
+            self._meetings.append(meeting)
 
     def __iter__(self):
-        for meeting in self.meetings:
+        for meeting in self._meetings:
+            if meeting.suppressed:
+                continue
+
             yield meeting
+
+    def __getitem__(self, key):
+        return self._meetings[key]
