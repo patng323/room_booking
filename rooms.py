@@ -1,7 +1,14 @@
-from __future__ import print_function
+# -*- coding: utf-8 -*-
 import string
 import random
 
+
+feature_ids = {
+    "投影機": 1,
+    "鋼琴": 2,
+    "副堂": 3,
+
+}
 
 class Room:
     MAX_SIZE = 100  # TODO: temp

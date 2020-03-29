@@ -113,6 +113,18 @@ def main():
                 finally:
                     mtg.suppress_piano(False)
 
+    if status != 'INFEASIBLE':
+        print("----------------------")
+        print("Let's add one more room :-)")
+        manager.addMeeting(name="patrick", size=10, start_time=0, duration=4)
+        manager.printConfig(print_rooms=False, print_timeslots=False)
+        status, solution = manager.resolve(past_solution=solution)
+        print(f"Status == {status}")
+        if status != 'INFEASIBLE':
+            manager.print_one_solution(solution)
+        print("----------------------")
+
+
     manager.printStats()
     end_time = datetime.now()
     print("end at " + str(end_time))
@@ -120,3 +132,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# --timeslots 10 --rooms 21 --meetings 98

@@ -1,7 +1,7 @@
 from __future__ import print_function
 from collections import defaultdict
 from rooms import Rooms
-from meetings import Meetings
+from meetings import Meetings, Meeting
 from ortools.sat.python import cp_model
 
 
@@ -28,11 +28,16 @@ class BookingManager:
 
     def genRandomInput(self, num_rooms, num_meetings):
         self.rooms = Rooms()
-        self.rooms = Rooms()
         self.rooms.genRandomInput(num_rooms)
 
-        self.meetings = Meetings(max_meeting_size=self.rooms.max_cap)
-        self.meetings.genRandomInput(num_meetings, num_timeslots=self.num_timeslots)
+        self.meetings = Meetings(max_meeting_size=self.rooms.max_cap, max_timeslot=self.num_timeslots-1)
+        self.meetings.genRandomInput(num_meetings)
+
+    def addMeeting(self, name, size, start_time, duration, needs_piano=False):
+        meeting = Meeting(name=name, size=size, meetings=self.meetings, needs_piano=needs_piano,
+                          start_time=start_time, duration=duration)
+        self.meetings.addMeeting(meeting)
+        self.__timeslot_requests = None
 
     @property
     def timeslot_requests(self):
@@ -45,31 +50,34 @@ class BookingManager:
 
         return self.__timeslot_requests
 
-    def printConfig(self):
-        print("---------------\n")
-        for meeting in self.meetings:
-            piano = ''
-            if meeting.needs_piano:
-                piano = '(P)'
-            print("Meeting {m}: size={size}{piano}, timeslots={ts}".format(
-                m=meeting.name, piano=piano, size=meeting.size, ts=str(meeting.meeting_times)))
-    
-        print("---------------\n")
-        for room in self.rooms:
-            piano = ''
-            if room.has_piano:
-                piano = '(P)'
-            print("Room {rn}: cap={cap} {piano}".format(rn=room.name, cap=room.room_cap, piano=piano))
-    
-        print("---------------\n")
-        for t in self.timeslots:
-            print("Time {t}: {ms} ({n})".format(t=t,
-                            ms=[self.meetings[m].name
-                                if not self.meetings[m].needs_piano
-                                else "{}P".format(self.meetings[m].name)
-                                for m in self.timeslot_requests[t]],
-                            n=len(self.timeslot_requests[t])))
-    
+    def printConfig(self, print_meetings=True, print_rooms=True, print_timeslots=True):
+        if print_meetings:
+            print("---------------\n")
+            for meeting in self.meetings:
+                piano = ''
+                if meeting.needs_piano:
+                    piano = '(P)'
+                print("Meeting {m}: size={size}{piano}, timeslots={ts}".format(
+                    m=meeting.name, piano=piano, size=meeting.size, ts=str(meeting.meeting_times)))
+
+        if print_rooms:
+            print("---------------\n")
+            for room in self.rooms:
+                piano = ''
+                if room.has_piano:
+                    piano = '(P)'
+                print("Room {rn}: cap={cap} {piano}".format(rn=room.name, cap=room.room_cap, piano=piano))
+
+        if print_timeslots:
+            print("---------------\n")
+            for t in self.timeslots:
+                print("Time {t}: {ms} ({n})".format(t=t,
+                                ms=[self.meetings[m].name
+                                    if not self.meetings[m].needs_piano
+                                    else "{}P".format(self.meetings[m].name)
+                                    for m in self.timeslot_requests[t]],
+                                n=len(self.timeslot_requests[t])))
+
         print("---------------\n")
 
     def basicCheck(self):
@@ -110,6 +118,7 @@ class BookingManager:
 
         # If we have a set of allocations we should follow, let's set condition for them first
         if solution:
+            print("createBookingModel: we have a past solution to follow")
             for t in self.timeslots:
                 for m in self.meetings:
                     for r in self.rooms:
@@ -218,8 +227,8 @@ class BookingManager:
         print()
         print("Meeting allocated total: {}".format(len(booking_allocated)))
 
-    def resolve(self, ignore_piano=False):
-        model, bookings = self.createBookingModel(ignore_piano=ignore_piano)
+    def resolve(self, ignore_piano=False, past_solution=None):
+        model, bookings = self.createBookingModel(solution=past_solution, ignore_piano=ignore_piano)
         self._lastBookings = bookings
         status = self._solver.Solve(model)
         status = self._solver.StatusName(status)
@@ -231,6 +240,7 @@ class BookingManager:
             solution = None
 
         return status, solution
+
 
     def printStats(self):
         print("Solve returns: " + self._lastStatus)

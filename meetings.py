@@ -1,20 +1,31 @@
 from __future__ import print_function
 import random
+import argparse
+import pandas as pd
 
 
 class Meeting:
     MAX_SIZE = 100  # TODO: temp
     
-    def __init__(self, name):
-        self.__size = 0
-        self.__needs_piano = False
+    def __init__(self, name, meetings, size=0, needs_piano=False, start_time=None, duration=None, min_size=None):
+        self.__size = size
+        # if the requested size is 8-10 ppl, then size=10, and minSize=8
+        assert min_size is None or min_size <= size
+        self.__min_size = min_size if min_size is not None else size
+
+        self.__needs_piano = needs_piano
         self.__piano_suppressed = False
+        self.__meetings = meetings  # Parent object
         self.suppressed = False
         self.__start_time = 0
         self.__duration = 0
         self.__end_time = 0
         self.__meeting_times = None
         self.name = name
+
+        if start_time is not None:
+            assert duration > 0
+            self.set_time(start_time, duration)
 
     def suppress_piano(self, suppress=True):
         self.__piano_suppressed = suppress
@@ -36,7 +47,10 @@ class Meeting:
 
     @property
     def size(self):
-        return self.__size
+        if self.__meetings.use_min_size:
+            return self.__min_size
+        else:
+            return self.__size
 
     @size.setter
     def size(self, val):
@@ -45,11 +59,11 @@ class Meeting:
 
         self.__size = val
 
-    def set_time(self, start_time, duration, max_timeslot, truncate=False):
+    def set_time(self, start_time, duration, truncate=False):
         self.__start_time = start_time
-        if start_time + duration - 1 > max_timeslot:
+        if start_time + duration - 1 > self.__meetings.max_timeslot:
             if truncate:
-                duration = max_timeslot - start_time + 1
+                duration = self.__meetings.max_timeslot - start_time + 1
             else:
                 raise Exception("start_time + duration has passed the max_timeslot allowed")
 
@@ -69,20 +83,22 @@ class Meetings:
     # Extra properties:
     # - location (Truth building)
 
-    def __init__(self, max_meeting_size):
+    def __init__(self, max_meeting_size, max_timeslot):
         self._meetings = []
         self.num_meetings = 0
         self.max_meeting_size = max_meeting_size
+        self.max_timeslot = max_timeslot
+        self.use_min_size = False
 
-    def genRandomInput(self, num_meetings, num_timeslots):
+    def genRandomInput(self, num_meetings):
         self.num_meetings = num_meetings
         self._meetings = []
 
         for i in range(num_meetings):
-            meeting = Meeting(name=i)
+            meeting = Meeting(name=i, meetings=self)
 
             meeting.size = random.randint(2, self.max_meeting_size)
-            start_time = random.randint(0, num_timeslots-1)
+            start_time = random.randint(0, self.max_timeslot)
 
             if random.randint(1, 100) >= 80:
                 meeting.needs_piano = True
@@ -95,8 +111,12 @@ class Meetings:
             else:
                 duration = 3
 
-            meeting.set_time(start_time, duration, num_timeslots-1, truncate=True)
+            meeting.set_time(start_time, duration, truncate=True)
             self._meetings.append(meeting)
+
+    def addMeeting(self, meeting):
+        self._meetings.append(meeting)
+
 
     def __iter__(self):
         for meeting in self._meetings:
@@ -107,3 +127,29 @@ class Meetings:
 
     def __getitem__(self, key):
         return self._meetings[key]
+
+
+    def parse_excel_input(self, request):
+        time_field = request["Time"]
+        time_field = time_field.replace(" ", "")
+
+        # TODO: finish it.....
+
+
+    def import_requests(self, path, append=True):
+        df = pd.read_excel(path)
+
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--topicIn", help="topic of input", default='dataInput')
+    parser.add_argument("--countByClass", action="store_true")  # Boolean type
+    parser.add_argument("--size", choices=[1, 2, 3], type=int, default=100)
+    args = parser.parse_args()
+
+    pass
+
+
+if __name__ == "__main__":
+    main()
