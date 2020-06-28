@@ -22,6 +22,7 @@ class Meetings:
         for path in [filepath_fixed, filepath_requests]:
             if path:
                 df = Util.load_data(path, ratio)
+                print(f"Records read: {len(df)}")
                 for info in df.itertuples():
                     name = info.name
                     start, end = Util.parse_time_field(info.time)
@@ -48,6 +49,7 @@ class Meetings:
                                           fixed=fixed,
                                           room=room,
                                           start_time=start, end_time=end)
+                        meeting.id = len(self._meetings)
                         self._meetings.append(meeting)
 
 

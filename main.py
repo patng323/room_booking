@@ -32,13 +32,10 @@ def main():
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
 
-    # TODO:
-    # Why 週六 SATpoint 崇拜 won't be assigned to the fixed room?
-    # Why 'no 2 meetings can share the same room' rule isn't working?
-    site.load_meeting_requests('data/truth_fixed_20191123.csv', None, ratio=1.0)
-                               #'data/truth_requests_20191123.csv')
+    site.load_meeting_requests('data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv', ratio=1.0)
+    #site.load_meeting_requests(, None, ratio=1.0)
 
-    site.printConfig()
+    site.printConfig(print_meetings=False, print_rooms=False)
 
     res, info = site.basicCheck()
     if res != site.CHECK_SUCCESS:
@@ -86,12 +83,6 @@ def main():
 
     start_time = datetime.now()
     print("start at " + str(start_time))
-
-    if False:
-        # Display the first five solutions.
-        a_few_solutions = range(1)
-        solution_printer = PartialSolutionPrinter(bookings, a_few_solutions)
-        solver.SearchForAllSolutions(model, solution_printer)
 
     # Minimize room cap wastage
     #model.Minimize(sum((r.room_cap - m.size) * bookings[(m.name, t, r.name)]

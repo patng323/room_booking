@@ -7,13 +7,7 @@ from util import Util
 
 
 def getid(meeting, timeslot, room):
-    if meeting.room:
-        # Has pre-assigned room(s).  We have to suffix the meeting name with its room name,
-        # to avoid having meeting name conflict if a meeting has 2 or more pre-assigned rooms.
-        meeting_name = f"{meeting.name}({meeting.room})"
-    else:
-        meeting_name = meeting.name
-    return meeting_name, timeslot, room.name
+    return f"{meeting.name}({meeting.id})", timeslot, room.name
 
 
 class Site:

@@ -30,6 +30,7 @@ class Meeting:
         self.__duration = 0
         self.__end_time = 0
         self.__meeting_times = None
+        self.id = None
 
         if start_timeslot is not None:
             assert duration > 0 and start_time is None and end_time is None
