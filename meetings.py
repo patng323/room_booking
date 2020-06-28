@@ -1,81 +1,9 @@
-from __future__ import print_function
 import random
 import argparse
 import pandas as pd
-
-
-class Meeting:
-    MAX_SIZE = 100  # TODO: temp
-    
-    def __init__(self, name, meetings, size=0, needs_piano=False, start_time=None, duration=None, min_size=None):
-        self.__size = size
-        # if the requested size is 8-10 ppl, then size=10, and minSize=8
-        assert min_size is None or min_size <= size
-        self.__min_size = min_size if min_size is not None else size
-
-        self.__needs_piano = needs_piano
-        self.__piano_suppressed = False
-        self.__meetings = meetings  # Parent object
-        self.suppressed = False
-        self.__start_time = 0
-        self.__duration = 0
-        self.__end_time = 0
-        self.__meeting_times = None
-        self.name = name
-
-        if start_time is not None:
-            assert duration > 0
-            self.set_time(start_time, duration)
-
-    def suppress_piano(self, suppress=True):
-        self.__piano_suppressed = suppress
-
-    @property
-    def piano_suppressed(self):
-        return self.__piano_suppressed
-
-    @property
-    def needs_piano(self):
-        if self.__piano_suppressed:
-            return False
-        else:
-            return self.__needs_piano
-
-    @needs_piano.setter
-    def needs_piano(self, val):
-        self.__needs_piano = val
-
-    @property
-    def size(self):
-        if self.__meetings.use_min_size:
-            return self.__min_size
-        else:
-            return self.__size
-
-    @size.setter
-    def size(self, val):
-        if val > self.MAX_SIZE:
-            raise Exception("Meeting size is larger than max {}".format(self.MAX_SIZE))
-
-        self.__size = val
-
-    def set_time(self, start_time, duration, truncate=False):
-        self.__start_time = start_time
-        if start_time + duration - 1 > self.__meetings.max_timeslot:
-            if truncate:
-                duration = self.__meetings.max_timeslot - start_time + 1
-            else:
-                raise Exception("start_time + duration has passed the max_timeslot allowed")
-
-        self.__duration = duration
-        self.__meeting_times = None
-
-    @property
-    def meeting_times(self):
-        if self.__meeting_times is None:
-            self.__meeting_times = list(range(self.__start_time, self.__start_time + self.__duration))
-
-        return self.__meeting_times
+from util import Util
+from meeting import Meeting
+import numpy as np
 
 
 class Meetings:
@@ -89,6 +17,39 @@ class Meetings:
         self.max_meeting_size = max_meeting_size
         self.max_timeslot = max_timeslot
         self.use_min_size = False
+
+    def load_meeting_requests(self, filepath_fixed, filepath_requests, ratio=1.0):
+        for path in [filepath_fixed, filepath_requests]:
+            if path:
+                df = Util.load_data(path, ratio)
+                for info in df.itertuples():
+                    name = info.name
+                    start, end = Util.parse_time_field(info.time)
+
+                    if 'fixed' in df.columns:
+                        fixed = info.fixed == 1
+                    else:
+                        fixed = False
+
+                    if 'size' in df.columns:
+                        size, min_size = Util.parse_size(info.size)
+                    else:
+                        size = min_size = 0  # No size is specified for this meeting; it's for fixed booking
+
+                    # Note: the room field may contains multiple rooms.  E.g. 'G11, G12, G13'
+                    # For the sake of room allocation, each room will be treated as a separate booking
+                    rooms = [None]
+                    if info.room and type(info.room) == str:
+                        rooms = info.room.replace(', ', ',').split(',')
+
+                    for room, i in zip(rooms, range(len(rooms))):
+                        meeting = Meeting(name=name, meetings=self,
+                                          size=size, min_size=min_size,
+                                          fixed=fixed,
+                                          room=room,
+                                          start_time=start, end_time=end)
+                        self._meetings.append(meeting)
+
 
     def genRandomInput(self, num_meetings):
         self.num_meetings = num_meetings
@@ -126,7 +87,18 @@ class Meetings:
             yield meeting
 
     def __getitem__(self, key):
-        return self._meetings[key]
+        if type(key) == int:
+            return self._meetings[key]
+        else:
+            res = []
+            for m in self._meetings:
+                if m.name == key:
+                    res.append(m)
+
+            if len(res) == 1:
+                return res[0]
+            else:
+                return res
 
 
     def parse_excel_input(self, request):

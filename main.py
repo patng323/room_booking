@@ -1,16 +1,16 @@
-from __future__ import print_function
 import random
 from datetime import datetime
-from bookingManager import BookingManager
+import pandas as pd
+from site_booking import Site
 import argparse
 
 random.seed(1234)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--timeslots", type=int)
-    parser.add_argument("--rooms", type=int)
-    parser.add_argument("--meetings", type=int)
+    parser.add_argument("--timeslots", type=int, default=24)
+    parser.add_argument("--rooms", type=int, default=50)
+    parser.add_argument("--meetings", type=int, default=20)
     args = parser.parse_args()
 
     minimizeCost = False
@@ -25,13 +25,23 @@ def main():
     #g_rooms.add_edge("B", "C")
 
 
-    manager = BookingManager(name="Truth", num_timeslots=args.timeslots)
-    manager.genRandomInput(num_rooms=args.rooms, num_meetings=args.meetings)
+    site = Site(name="truth")
+    #site.genRandomInput(num_rooms=args.rooms, num_meetings=args.meetings)
+    # TODO:
+    # Handle: multiple rooms specified e.g. room=T1, T2
+    # Handle: G(地下禮堂+後區) in request
+    site.load_site_info()
 
-    manager.printConfig()
+    # TODO:
+    # Why 週六 SATpoint 崇拜 won't be assigned to the fixed room?
+    # Why 'no 2 meetings can share the same room' rule isn't working?
+    site.load_meeting_requests('data/truth_fixed_20191123.csv', None, ratio=1.0)
+                               #'data/truth_requests_20191123.csv')
 
-    res, info = manager.basicCheck()
-    if res != manager.CHECK_SUCCESS:
+    site.printConfig()
+
+    res, info = site.basicCheck()
+    if res != site.CHECK_SUCCESS:
         exit(1)
 
     if False:
@@ -87,28 +97,29 @@ def main():
     #model.Minimize(sum((r.room_cap - m.size) * bookings[(m.name, t, r.name)]
     #                   for m in meetings for t in all_timeslots for r in rooms))
 
-    status, solution = manager.resolve()
+
+    status, solution = site.resolve()
     if status != 'INFEASIBLE':
-        manager.print_one_solution(solution)
+        site.print_one_solution(solution)
     else:
         print()
         print("Solve returns: " + status)
         print("Let's try ignoring piano for all meetings")
         print()
-        status, solution = manager.resolve(ignore_piano=True)
+        status, solution = site.resolve(ignore_piano=True)
         if status != 'INFEASIBLE':
             print("It works without piano; so let's figure out which meeting is the culprit")
             print("We start by suppressing piano, starting with the smallest meeting")
             print()
-            mtgs = manager.meetings_which_need_piano()
+            mtgs = site.meetings_which_need_piano()
             mtgs = sorted(mtgs, key=lambda mtg: mtg.size)
             for mtg in mtgs:
                 mtg.suppress_piano()
                 print("Suppress piano for meeting {} and try allocating:".format(mtg.name))
                 try:
-                    status, solution = manager.resolve()
+                    status, solution = site.resolve()
                     if status != 'INFEASIBLE':
-                        manager.print_one_solution(solution)
+                        site.print_one_solution(solution)
                         break
                 finally:
                     mtg.suppress_piano(False)
@@ -116,16 +127,16 @@ def main():
     if status != 'INFEASIBLE':
         print("----------------------")
         print("Let's add one more room :-)")
-        manager.addMeeting(name="patrick", size=10, start_time=0, duration=4)
-        manager.printConfig(print_rooms=False, print_timeslots=False)
-        status, solution = manager.resolve(past_solution=solution)
+        site.addMeeting(name="patrick", size=10, start_time=0, duration=4)
+        site.printConfig(print_rooms=False, print_timeslots=False)
+        status, solution = site.resolve(past_solution=solution)
         print(f"Status == {status}")
         if status != 'INFEASIBLE':
-            manager.print_one_solution(solution)
+            site.print_one_solution(solution)
         print("----------------------")
 
 
-    manager.printStats()
+    site.printStats()
     end_time = datetime.now()
     print("end at " + str(end_time))
     print("duration: " + str(end_time - start_time))

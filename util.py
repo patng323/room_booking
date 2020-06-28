@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 import re
 from datetime import datetime, timedelta
+import pandas as pd
+
+_startTime = datetime(year=1900, month=1, day=1, hour=8, minute=0)
 
 class Util:
+
     @staticmethod
     def parse_time_field(time_field: str):
         time_field = time_field.replace(" ", "")
@@ -32,6 +36,41 @@ class Util:
             parts_time.append(part_time)
 
         return parts_time[0], parts_time[1]
+
+    @staticmethod
+    def dt_to_timeslot(value: datetime):
+        return int(((value.hour * 60 + value.minute) -
+                    (_startTime.hour * 60 + _startTime.minute)) / 30)
+
+    @staticmethod
+    def timeslot_to_dt(value: int):
+        return _startTime + timedelta(minutes=value * 30)
+
+    @staticmethod
+    def parse_size(value: str):
+        value = value.replace('人', '')
+        value = value.replace(' ', '')
+        parts = value.split('-')
+        if len(parts) == 1:
+            size = int(parts[0])
+            min_size = 0
+        else:
+            min_size = int(parts[0])
+            size = int(parts[1])
+
+        return size, min_size
+
+    @staticmethod
+    def load_data(path: str, ratio=1.0):
+        assert 0 < ratio <= 1.0
+        df = pd.read_csv(path)
+        if ratio < 1.0:
+            df = df.head(n=int(len(df) * ratio))
+        if 'room' in df.columns:
+            df['room'] = df.apply(lambda row: row['room'].replace(' ', '') if type(row['room']) == str else row['room'],
+                                  axis=1)
+
+        return df
 
 
 
