@@ -46,6 +46,13 @@ class Util:
     def timeslot_to_dt(value: int):
         return _startTime + timedelta(minutes=value * 30)
 
+
+    @staticmethod
+    def timeslot_to_str(value: int):
+        s = f"{datetime.strftime(Util.timeslot_to_dt(value), '%H:%M')} - \
+{datetime.strftime(Util.timeslot_to_dt(value) + timedelta(minutes=30), '%H:%M')}"
+        return s
+
     @staticmethod
     def parse_size(value: str):
         value = value.replace('人', '')

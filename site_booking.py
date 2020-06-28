@@ -4,6 +4,8 @@ from meetings import Meetings, Meeting
 from ortools.sat.python import cp_model
 from datetime import datetime
 from util import Util
+import pandas as pd
+import numpy as np
 
 
 def getid(meeting, timeslot, room):
@@ -39,10 +41,10 @@ class Site:
         self.rooms = Rooms()
         self.rooms.load_site_info(f"data/building_info_{self.name}.csv")
 
-    def load_meeting_requests(self, filepath_fixed, filepath_requests, ratio=1.0):
+    def load_meeting_requests(self, paths, ratio=1.0):
         assert self.rooms is not None
         self.meetings = Meetings(max_meeting_size=self.rooms.max_cap, max_timeslot=self.num_timeslots-1)
-        self.meetings.load_meeting_requests(filepath_fixed, filepath_requests, ratio)
+        self.meetings.load_meeting_requests(paths, ratio)
         for m in self.meetings:
             assert m.room is None or m.room in self.rooms.room_names, f"Room '{m.room}' is not found"
 
@@ -243,6 +245,28 @@ class Site:
                         allocations.append(getid(m, t, r))
 
         return {"alloc": allocations}
+
+
+    def export_solution(self, solution, fn):
+        df = pd.DataFrame(columns=["Time"])
+        for t, i in zip(self.timeslots, range(len(self.timeslots))):
+            df = df.append({'Time': Util.timeslot_to_str(t)}, ignore_index=True)
+            for m in self.meetings:
+                for r in self.rooms:
+                    if getid(m, t, r) in solution["alloc"]:
+                        if r.name not in df:
+                            df[r.name] = ""
+
+                        df.at[i, r.name] = m.name
+
+        room_cols = set(df.columns)
+        room_cols.remove('Time')
+        room_cols = list(room_cols)
+        room_cols.sort()
+        cols = ["Time"]
+        cols.extend(room_cols)
+
+        df[cols].to_csv(fn, index=False, na_rep='', encoding='utf_8_sig')
 
     def print_one_solution(self, solution):
         booking_allocated = set()

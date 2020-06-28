@@ -28,13 +28,9 @@ def main():
     site = Site(name="truth")
     #site.genRandomInput(num_rooms=args.rooms, num_meetings=args.meetings)
     # TODO:
-    # Handle: multiple rooms specified e.g. room=T1, T2
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
-
-    site.load_meeting_requests('data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv', ratio=1.0)
-    #site.load_meeting_requests(, None, ratio=1.0)
-
+    site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=0.1)
     site.printConfig(print_meetings=False, print_rooms=False)
 
     res, info = site.basicCheck()
@@ -124,6 +120,7 @@ def main():
         print(f"Status == {status}")
         if status != 'INFEASIBLE':
             site.print_one_solution(solution)
+            site.export_solution(solution, "result.csv")
         print("----------------------")
 
 

@@ -18,8 +18,8 @@ class Meetings:
         self.max_timeslot = max_timeslot
         self.use_min_size = False
 
-    def load_meeting_requests(self, filepath_fixed, filepath_requests, ratio=1.0):
-        for path in [filepath_fixed, filepath_requests]:
+    def load_meeting_requests(self, paths, ratio=1.0):
+        for path in paths:
             if path:
                 df = Util.load_data(path, ratio)
                 print(f"Records read: {len(df)}")
