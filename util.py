@@ -5,6 +5,7 @@ import pandas as pd
 
 _startTime = datetime(year=1900, month=1, day=1, hour=8, minute=0)
 
+
 class Util:
 
     @staticmethod
@@ -46,11 +47,10 @@ class Util:
     def timeslot_to_dt(value: int):
         return _startTime + timedelta(minutes=value * 30)
 
-
     @staticmethod
     def timeslot_to_str(value: int):
         s = f"{datetime.strftime(Util.timeslot_to_dt(value), '%H:%M')} - \
-{datetime.strftime(Util.timeslot_to_dt(value) + timedelta(minutes=30), '%H:%M')}"
+            {datetime.strftime(Util.timeslot_to_dt(value) + timedelta(minutes=30), '%H:%M')}"
         return s
 
     @staticmethod
@@ -78,6 +78,13 @@ class Util:
                                   axis=1)
 
         return df
+
+
+class MeetingRequestError(Exception):
+    def __init__(self, message, detail=None):
+        self.message = message
+        self.detail = detail
+        super().__init__(self.message + "\nDetail:\n{}".format(self.detail))
 
 
 

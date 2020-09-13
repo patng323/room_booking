@@ -3,7 +3,7 @@ from rooms import Rooms
 from meetings import Meetings, Meeting
 from ortools.sat.python import cp_model
 from datetime import datetime
-from util import Util
+from util import Util, MeetingRequestError
 import pandas as pd
 import numpy as np
 
@@ -43,7 +43,7 @@ class Site:
 
     def load_meeting_requests(self, paths, ratio=1.0):
         assert self.rooms is not None
-        self.meetings = Meetings(max_meeting_size=self.rooms.max_cap, max_timeslot=self.num_timeslots-1)
+        self.meetings = Meetings(site=self)
         self.meetings.load_meeting_requests(paths, ratio)
         for m in self.meetings:
             assert m.room is None or m.room in self.rooms.room_names, f"Room '{m.room}' is not found"
@@ -52,7 +52,7 @@ class Site:
         self.rooms = Rooms()
         self.rooms.genRandomInput(num_rooms)
 
-        self.meetings = Meetings(max_meeting_size=self.rooms.max_cap, max_timeslot=self.num_timeslots-1)
+        self.meetings = Meetings(site=self)
         self.meetings.genRandomInput(num_meetings)
 
     def addMeeting(self, name, size, start_time, duration, needs_piano=False):
@@ -60,6 +60,14 @@ class Site:
                           start_timeslot=start_time, duration=duration)
         self.meetings.addMeeting(meeting)
         self.__timeslot_requests = None
+
+    @property
+    def max_room_size(self):
+        return self.rooms.max_cap
+
+    @property
+    def max_timeslot(self):
+        return self.num_timeslots-1
 
     @property
     def timeslot_requests(self):
@@ -119,32 +127,32 @@ class Site:
                 for meeting in tr:
                     if meeting.room:
                         if meeting.room in room_booked_by:
-                            print(f"Timeslot {t} ({Util.timeslot_to_dt(t).strftime('%H:%M:%S')}): "
-                                  f"Room '{meeting.room}' is requested by both:\n"
-                                  f"'{room_booked_by[meeting.room]}'\n"
-                                  f"'{meeting.name}'")
-                            return self.CHECK_FIXED_ROOM_CONFLICT, {"timeslot": t,
-                                                                    "room": meeting.room,
-                                                                    "meeting1": room_booked_by[meeting.room],
-                                                                    "meeting2": meeting.name}
+                            msg = f"Timeslot {t} ({Util.timeslot_to_dt(t).strftime('%H:%M:%S')}): " + \
+                                  f"Room '{meeting.room}' is requested by both:\n" + \
+                                  f"'{room_booked_by[meeting.room]}'\n" + \
+                                  f"'{meeting.name}'"
+                            raise MeetingRequestError(msg,
+                                                      {"code": self.CHECK_FIXED_ROOM_CONFLICT,
+                                                       "timeslot": t,
+                                                       "room": meeting.room,
+                                                       "meeting1": room_booked_by[meeting.room],
+                                                       "meeting2": meeting.name})
                         else:
                             room_booked_by[meeting.room] = meeting.name
 
                 if len(tr) > self.rooms.num_rooms:
-                    print('Too many meetings (total: {}) are booked at time {}'.format(len(tr), t))
-                    return self.CHECK_FAILED_NO_OF_MEETINGS, {"timeslot": t}
+                    msg = 'Too many meetings (total: {}) are booked at time {}'.format(len(tr), t)
+                    raise MeetingRequestError(msg, {"code": self.CHECK_FAILED_NO_OF_MEETINGS, "timeslot": t})
 
                 sizes_sorted = sorted([(m, m.size) for m in tr], key=lambda x: x[1],
                                       reverse=True)
                 for i in range(len(sizes_sorted)):
                     if sizes_sorted[i][1] > room_caps_sorted[i]:
-                        print('Meeting {m} cannot find a fitting room (of size {s}) at time {t}'.format(
-                            m=sizes_sorted[i][0].name, s=sizes_sorted[i][1], t=t))
-                        print('Caps of all rooms: \n{}'.format(room_caps_sorted))
-                        print('Sizes of meeting at time {t}: \n{s}'.format(t=t, s=str([x[1] for x in sizes_sorted])))
-                        return self.CHECK_FAILED_MEETING_SIZE, {"timeslot": t}
-
-        return self.CHECK_SUCCESS, None
+                        msg = 'Meeting {m} cannot find a fitting room (of size {s}) at time {t}\n'.format(
+                            m=sizes_sorted[i][0].name, s=sizes_sorted[i][1], t=t) + \
+                            'Caps of all rooms: \n{}'.format(room_caps_sorted) + \
+                            'Sizes of meeting at time {t}: \n{s}'.format(t=t, s=str([x[1] for x in sizes_sorted]))
+                        raise MeetingRequestError(msg, {"code": self.CHECK_FAILED_MEETING_SIZE, "timeslot": t})
 
     def createBookingModel(self, solution=None, ignore_piano=False):
         print(f"createBookingModel: start - {datetime.now()}")

@@ -11,6 +11,7 @@ def main():
     parser.add_argument("--timeslots", type=int, default=24)
     parser.add_argument("--rooms", type=int, default=50)
     parser.add_argument("--meetings", type=int, default=20)
+    parser.add_argument("--ratio", type=float, default=1.0)
     args = parser.parse_args()
 
     minimizeCost = False
@@ -30,12 +31,10 @@ def main():
     # TODO:
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
-    site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=0.1)
+    site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=args.ratio)
     site.printConfig(print_meetings=False, print_rooms=False)
 
-    res, info = site.basicCheck()
-    if res != site.CHECK_SUCCESS:
-        exit(1)
+    site.basicCheck()
 
     if False:
         all_noisy_meetings = list(filter(lambda i: meeting_makeNoise[i] == 1, range(num_meetings)))
