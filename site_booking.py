@@ -174,6 +174,7 @@ class Site:
                 for m in self.meetings:
                     for r in self.rooms:
                         if getid(m, t, r) in solution["alloc"]:
+                            # This exact [meeting, timeslot, room] combination has been set in the past solution
                             model.Add(bookings[getid(m, t, r)] == 1)
 
         # A meeting must happen at its specified time slots
@@ -193,7 +194,7 @@ class Site:
                         # if meeting m needs timeslot t, we need to book exactly one room at timeslot t
                         model.Add(sum(bookings[getid(m, t, r)] for r in self.rooms) == 1)
                 else:
-                    # Don't assign meeting m to any room
+                    # Meeting m doesn't need this timeslot.  So don't assign it to any room at timeslot t
                     for r in self.rooms:
                         model.Add(bookings[getid(m, t, r)] == 0)
     
@@ -216,7 +217,8 @@ class Site:
                     if r.room_cap < m.size:
                         model.Add(bookings[getid(m, t, r)] == 0)
 
-        # A meeting must use the same room in all its required timeslots (e.g. if meeting 1 span two timeslots, then ...)
+        # A meeting must use the same room in all its required timeslots
+        # (e.g. if meeting 1 span two timeslots, then ...)
         for m in self.meetings:
             for r in self.rooms:
                 for i in range(len(m.meeting_times) - 1):
@@ -331,7 +333,6 @@ class Site:
             solution = None
 
         return status, solution
-
 
     def printStats(self):
         print("Solve returns: " + self._lastStatus)
