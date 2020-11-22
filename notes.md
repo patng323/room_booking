@@ -1,7 +1,0 @@
-- Requests R1
-    - Solution S1
-- Add more requests R2
-    - Fits: Solution S1.1
-- Add more requests R3
-    - Can't fit
-- 
