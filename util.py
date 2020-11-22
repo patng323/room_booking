@@ -49,8 +49,8 @@ class Util:
 
     @staticmethod
     def timeslot_to_str(value: int):
-        s = f"{datetime.strftime(Util.timeslot_to_dt(value), '%H:%M')} - \
-            {datetime.strftime(Util.timeslot_to_dt(value) + timedelta(minutes=30), '%H:%M')}"
+        s = f"{datetime.strftime(Util.timeslot_to_dt(value), '%H:%M')} - " \
+            f"{datetime.strftime(Util.timeslot_to_dt(value) + timedelta(minutes=30), '%H:%M')}"
         return s
 
     @staticmethod

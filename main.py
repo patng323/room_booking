@@ -83,10 +83,12 @@ def main():
     #model.Minimize(sum((r.room_cap - m.size) * bookings[(m.name, t, r.name)]
     #                   for m in meetings for t in all_timeslots for r in rooms))
 
+    site.printConfig(print_rooms=False, print_timeslots=False)
 
     status, solution = site.resolve()
     if status != 'INFEASIBLE':
         site.print_one_solution(solution)
+        site.export_solution(solution, "result.csv")
     else:
         print()
         print("Solve returns: " + status)
@@ -110,7 +112,7 @@ def main():
                 finally:
                     mtg.suppress_piano(False)
 
-    if status != 'INFEASIBLE':
+    if status != 'INFEASIBLE' and False:
         print("----------------------")
         print("Let's add one more room :-)")
         site.addMeeting(name="patrick", size=10, start_time=0, duration=4)

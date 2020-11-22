@@ -1,4 +1,29 @@
 from util import Util
+import re
+
+re_unit_match = re.compile(r"[^\(\)（）團班組]+(?:團契|團|班|小組|課程|門訓|廣場|fellowship|崇拜)", flags=re.IGNORECASE)
+re_unit_match_eng = re.compile(r"([^\-]+)(?:\s{0,1}\-\s{0,1}.*|$)", flags=re.IGNORECASE)
+re_english_name = re.compile(r'^[A-Za-z0-9\.\(\)\- ]+$')
+special_units = ['男人天空']
+
+
+def get_unit_from_name(name):
+    for su in special_units:
+        if su in name:
+            return su
+
+    # Handle English only case
+    if re_english_name.match(name) is not None:
+        srch = re_unit_match_eng.search(name)
+        if srch and srch.groups():
+            return srch.groups()[0].strip()
+
+    res = re_unit_match.match(name)
+    if res is not None:
+        return res[0]
+
+    return None
+
 
 class Meeting:
     MAX_SIZE = 300  # TODO: temp
@@ -11,6 +36,8 @@ class Meeting:
                  start_timeslot=None, duration=None,
                  start_time=None, end_time=None):
         self.name = name
+        self.unit = get_unit_from_name(name)  # 單位
+
         self.__meetings = meetings  # Parent object
 
         self.room = room  # Pre-assigned room

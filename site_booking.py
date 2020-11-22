@@ -13,7 +13,6 @@ def getid(meeting, timeslot, room):
 
 
 class Site:
-    CHECK_SUCCESS = 1
     CHECK_FAILED_MEETING_SIZE = -1
     CHECK_FAILED_NO_OF_MEETINGS = -2
     CHECK_FIXED_ROOM_CONFLICT = -3
@@ -48,6 +47,11 @@ class Site:
         for m in self.meetings:
             assert m.room is None or m.room in self.rooms.room_names, f"Room '{m.room}' is not found"
 
+        self.detect_related_meetings()
+
+    def detect_related_meetings(self):
+        all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)
+
     def genRandomInput(self, num_rooms, num_meetings):
         self.rooms = Rooms()
         self.rooms.genRandomInput(num_rooms)
@@ -58,7 +62,7 @@ class Site:
     def addMeeting(self, name, size, start_time, duration, needs_piano=False):
         meeting = Meeting(name=name, size=size, meetings=self.meetings, needs_piano=needs_piano,
                           start_timeslot=start_time, duration=duration)
-        self.meetings.addMeeting(meeting)
+        self.meetings.add_meeting(meeting)
         self.__timeslot_requests = None
 
     @property
@@ -89,6 +93,8 @@ class Site:
                     piano = '(P)'
 
                 name = meeting.name
+                if meeting.unit:
+                    name += f" <{meeting.unit}>"
                 if meeting.room:
                     name += f" : {meeting.room}"
                 print(f"Meeting {name}: size={meeting.size}{piano}, timeslots={str(meeting.meeting_times)}")
@@ -256,7 +262,6 @@ class Site:
 
         return {"alloc": allocations}
 
-
     def export_solution(self, solution, fn):
         df = pd.DataFrame(columns=["Time"])
         for t, i in zip(self.timeslots, range(len(self.timeslots))):
@@ -308,15 +313,9 @@ class Site:
                         if extra_rm:
                             extra_rm = '(' + extra_rm + ')'
                         print(
-                            '  Mtg-{meeting}{mtg_times_info} (size:{mtgsize}) assigned to {room}{extra_rm} (cap:{roomcap}) '
-                            '(waste={waste}) {final_info}'.format(meeting=name,
-                                                     mtgsize=m.size,
-                                                     room=r.name, roomcap=r.room_cap,
-                                                     waste=(r.room_cap - m.size),
-                                                     extra_rm=extra_rm,
-                                                     mtg_times_info=mtg_times_info,
-                                                     final_info=final_info
-                                                     ))
+                            f'  Mtg-{name}{mtg_times_info} (size:{m.size}) assigned to {r.name}{extra_rm} '
+                            f'(cap:{r.room_cap}) (waste={(r.room_cap - m.size)}) {final_info}'
+                        )
         print()
         print("Meeting allocated total: {}".format(len(booking_allocated)))
 

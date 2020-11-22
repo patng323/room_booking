@@ -58,6 +58,41 @@ class Meetings:
                         meeting.id = len(self._meetings)
                         self._meetings.append(meeting)
 
+    def add_meeting(self, meeting):
+        self._meetings.append(meeting)
+
+    def detect_related_meetings(self):
+        all_meetings = sorted(self._meetings, key=lambda m: m.name)
+
+    def __iter__(self):
+        for meeting in self._meetings:
+            if meeting.suppressed:
+                continue
+
+            yield meeting
+
+    def __getitem__(self, key):
+        if type(key) == int:
+            return self._meetings[key]
+        else:
+            res = []
+            for m in self._meetings:
+                if m.name == key:
+                    res.append(m)
+
+            if len(res) == 1:
+                return res[0]
+            else:
+                return res
+
+    def parse_excel_input(self, request):
+        time_field = request["Time"]
+        time_field = time_field.replace(" ", "")
+        # TODO: finish it.....
+
+    def import_requests(self, path, append=True):
+        df = pd.read_excel(path)
+        # TODO: finish it.....
 
     def genRandomInput(self, num_meetings):
         self.num_meetings = num_meetings
@@ -82,43 +117,6 @@ class Meetings:
 
             meeting.set_time(start_time, duration, truncate=True)
             self._meetings.append(meeting)
-
-    def addMeeting(self, meeting):
-        self._meetings.append(meeting)
-
-
-    def __iter__(self):
-        for meeting in self._meetings:
-            if meeting.suppressed:
-                continue
-
-            yield meeting
-
-    def __getitem__(self, key):
-        if type(key) == int:
-            return self._meetings[key]
-        else:
-            res = []
-            for m in self._meetings:
-                if m.name == key:
-                    res.append(m)
-
-            if len(res) == 1:
-                return res[0]
-            else:
-                return res
-
-
-    def parse_excel_input(self, request):
-        time_field = request["Time"]
-        time_field = time_field.replace(" ", "")
-
-        # TODO: finish it.....
-
-
-    def import_requests(self, path, append=True):
-        df = pd.read_excel(path)
-
 
 
 def main():
