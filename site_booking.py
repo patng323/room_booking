@@ -187,15 +187,18 @@ class Site:
         for m in self.meetings:
             for t in self.timeslots:
                 if t in m.meeting_times:
-                    # Set conditions for "fixed" meetings
-                    if m.fixed:
+                    # Set conditions for meetings with room specified
+                    if m.room and len(m.room.strip()) > 0:
+                        room_found = False
                         for r in self.rooms:
                             if m.room == r.name:
-                                # A fixed room
                                 model.Add(bookings[getid(m, t, self.rooms.get_room(m.room))] == 1)
+                                room_found = True
                             else:
                                 # Make sure we don't book other rooms
                                 model.Add(bookings[getid(m, t, r)] == 0)
+
+                        assert room_found, f'The room specified in {str(m)} cannot be found'
                     else:
                         # if meeting m needs timeslot t, we need to book exactly one room at timeslot t
                         model.Add(sum(bookings[getid(m, t, r)] for r in self.rooms) == 1)
@@ -239,6 +242,30 @@ class Site:
                     for r in self.rooms:
                         if m.needs_piano and not r.has_piano:
                             model.Add(bookings[getid(m, t, r)] == 0)  # if the room as no piano, don't assign
+
+        # Experiment 細房合併
+        # Two groups of rooms cannot be booked at the same time
+        small_rooms = []
+        large_room = None
+        for r in self.rooms:
+            if r.name in ['T10', 'T11']:
+                small_rooms.append(r)
+            elif r.name == 'T10+T11':
+                large_room = r
+
+        assert len(small_rooms) == 2
+        assert large_room is not None
+
+        for t in self.timeslots:
+            for small_room in small_rooms:
+                bookings_temp = []
+                for m in self.meetings:
+                    if t in m.meeting_times:
+                        bookings_temp.append(bookings[getid(m, t, large_room)])
+                        bookings_temp.append(bookings[getid(m, t, small_room)])
+
+                # 若大房已 book, 細房不能 book, or vice versa
+                model.Add(sum(bookings_temp) <= 1)
 
         print(f"createBookingModel: end - {datetime.now()}")
 
@@ -286,7 +313,7 @@ class Site:
     def print_one_solution(self, solution):
         booking_allocated = set()
         for t in self.timeslots:
-            print('Time %i' % t)
+            print(f'Time {t} ({Util.timeslot_to_str(t)})')
             for m in self.meetings:
                 for r in self.rooms:
                     if getid(m, t, r) in solution["alloc"]:

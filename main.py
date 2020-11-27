@@ -32,7 +32,7 @@ def main():
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
     site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=args.ratio)
-    site.printConfig(print_meetings=False, print_rooms=False)
+    site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()
 
@@ -92,25 +92,26 @@ def main():
     else:
         print()
         print("Solve returns: " + status)
-        print("Let's try ignoring piano for all meetings")
-        print()
-        status, solution = site.resolve(ignore_piano=True)
-        if status != 'INFEASIBLE':
-            print("It works without piano; so let's figure out which meeting is the culprit")
-            print("We start by suppressing piano, starting with the smallest meeting")
+        if False:
+            print("Let's try ignoring piano for all meetings")
             print()
-            mtgs = site.meetings_which_need_piano()
-            mtgs = sorted(mtgs, key=lambda mtg: mtg.size)
-            for mtg in mtgs:
-                mtg.suppress_piano()
-                print("Suppress piano for meeting {} and try allocating:".format(mtg.name))
-                try:
-                    status, solution = site.resolve()
-                    if status != 'INFEASIBLE':
-                        site.print_one_solution(solution)
-                        break
-                finally:
-                    mtg.suppress_piano(False)
+            status, solution = site.resolve(ignore_piano=True)
+            if status != 'INFEASIBLE':
+                print("It works without piano; so let's figure out which meeting is the culprit")
+                print("We start by suppressing piano, starting with the smallest meeting")
+                print()
+                mtgs = site.meetings_which_need_piano()
+                mtgs = sorted(mtgs, key=lambda mtg: mtg.size)
+                for mtg in mtgs:
+                    mtg.suppress_piano()
+                    print("Suppress piano for meeting {} and try allocating:".format(mtg.name))
+                    try:
+                        status, solution = site.resolve()
+                        if status != 'INFEASIBLE':
+                            site.print_one_solution(solution)
+                            break
+                    finally:
+                        mtg.suppress_piano(False)
 
     if status != 'INFEASIBLE' and False:
         print("----------------------")
@@ -123,7 +124,6 @@ def main():
             site.print_one_solution(solution)
             site.export_solution(solution, "result.csv")
         print("----------------------")
-
 
     site.printStats()
     end_time = datetime.now()
