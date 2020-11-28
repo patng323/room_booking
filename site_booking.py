@@ -38,7 +38,7 @@ class Site:
 
     def load_site_info(self):
         self.rooms = Rooms()
-        self.rooms.load_site_info(f"data/building_info_{self.name}.csv")
+        self.rooms.load_site_info(self.name)
 
     def load_meeting_requests(self, paths, ratio=1.0):
         assert self.rooms is not None
@@ -245,27 +245,20 @@ class Site:
 
         # Experiment 細房合併
         # Two groups of rooms cannot be booked at the same time
-        small_rooms = []
-        large_room = None
-        for r in self.rooms:
-            if r.name in ['T10', 'T11']:
-                small_rooms.append(r)
-            elif r.name == 'T10+T11':
-                large_room = r
+        for combined_info in self.rooms.rooms_combined:
+            small_rooms = combined_info['small_rooms']
+            large_room = combined_info['large_room']
 
-        assert len(small_rooms) == 2
-        assert large_room is not None
+            for t in self.timeslots:
+                for small_room in small_rooms:
+                    bookings_temp = []
+                    for m in self.meetings:
+                        if t in m.meeting_times:
+                            bookings_temp.append(bookings[getid(m, t, large_room)])
+                            bookings_temp.append(bookings[getid(m, t, small_room)])
 
-        for t in self.timeslots:
-            for small_room in small_rooms:
-                bookings_temp = []
-                for m in self.meetings:
-                    if t in m.meeting_times:
-                        bookings_temp.append(bookings[getid(m, t, large_room)])
-                        bookings_temp.append(bookings[getid(m, t, small_room)])
-
-                # 若大房已 book, 細房不能 book, or vice versa
-                model.Add(sum(bookings_temp) <= 1)
+                    # 若大房已 book, 細房不能 book, or vice versa
+                    model.Add(sum(bookings_temp) <= 1)
 
         print(f"createBookingModel: end - {datetime.now()}")
 

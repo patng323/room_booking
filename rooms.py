@@ -25,17 +25,30 @@ class Rooms:
     def __init__(self):
         self.max_cap = 0
         self._rooms_dict = dict()
+        self.rooms_combined = []
 
-    def load_site_info(self, filepath):
-        df = Util.load_data(filepath)
+    def load_site_info(self, name):
+        df_building_info = Util.load_data(f"data/building_info_{name}.csv")
         self.max_cap = 0
-        for info in df.itertuples():
+        for info in df_building_info.itertuples():
             assert info.room not in self._rooms_dict, "same room shouldn't appear twice in input file"
             room = Room(room_cap=info.size, name=info.room)
             if info.size > self.max_cap:
                 self.max_cap = info.size
 
             self._rooms_dict[info.room] = room
+
+        rooms_combined_info = Util.load_rooms_combined_info(f"data/rooms_combined_info_{name}.csv")
+        for combined in rooms_combined_info:
+            large_room_cap = 0
+            small_rooms = []
+            for room in combined:
+                small_rooms.append(self._rooms_dict[room])
+                large_room_cap += self._rooms_dict[room].room_cap
+
+            large_room = Room(room_cap=large_room_cap, name="+".join(combined))
+            self._rooms_dict[large_room.name] = large_room
+            self.rooms_combined.append({'large_room': large_room, 'small_rooms': small_rooms})
 
     @property
     def num_rooms(self):

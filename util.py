@@ -70,14 +70,28 @@ class Util:
     @staticmethod
     def load_data(path: str, ratio=1.0):
         assert 0 < ratio <= 1.0
-        df = pd.read_csv(path)
+        df_building_info = pd.read_csv(path)
         if ratio < 1.0:
-            df = df.head(n=int(len(df) * ratio))
-        if 'room' in df.columns:
-            df['room'] = df.apply(lambda row: row['room'].replace(' ', '') if type(row['room']) == str else row['room'],
-                                  axis=1)
+            df_building_info = df_building_info.head(n=int(len(df_building_info) * ratio))
+        if 'room' in df_building_info.columns:
+            df_building_info['room'] = df_building_info.apply(
+                lambda row: row['room'].replace(' ', '').strip() if type(row['room']) == str else row['room'], axis=1)
 
-        return df
+        return df_building_info
+
+    @staticmethod
+    def load_rooms_combined_info(path: str):
+        df = pd.read_csv(path)
+        rooms_combined_info = []
+        for rooms in df['rooms'].to_list():
+            info = []
+            for room in rooms.split(','):
+                room = room.strip().replace(' ', '')
+                info.append(room)
+
+            rooms_combined_info.append(info)
+
+        return rooms_combined_info
 
 
 class MeetingRequestError(Exception):
