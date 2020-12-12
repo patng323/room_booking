@@ -1,3 +1,4 @@
+#!/Users/patrickng/anaconda3/envs/py36/bin/python
 import random
 from datetime import datetime
 import pandas as pd
@@ -6,32 +7,33 @@ import argparse
 
 random.seed(1234)
 
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--timeslots", type=int, default=24)
-    parser.add_argument("--rooms", type=int, default=50)
-    parser.add_argument("--meetings", type=int, default=20)
+    # parser.add_argument("--timeslots", type=int, default=24)
+    # parser.add_argument("--rooms", type=int, default=50)
+    # parser.add_argument("--meetings", type=int, default=20)
     parser.add_argument("--ratio", type=float, default=1.0)
+    parser.add_argument("--noMinWaste", action="store_true")
+    parser.add_argument("--maxTime", help="Max. resolving time in sec", type=int, default=180)
     args = parser.parse_args()
-
-    minimizeCost = False
 
     # We have 3 rooms (A, B and C)
     # Use edge to mark which room is next to which
-    #g_rooms = networkx.Graph()
-    #for rm in list(room_names):
+    # g_rooms = networkx.Graph()
+    # for rm in list(room_names):
     #    g_rooms.add_node(rm)
 
-    #g_rooms.add_edge("A", "B")
-    #g_rooms.add_edge("B", "C")
-
+    # g_rooms.add_edge("A", "B")
+    # g_rooms.add_edge("B", "C")
 
     site = Site(name="truth")
-    #site.genRandomInput(num_rooms=args.rooms, num_meetings=args.meetings)
+    # site.genRandomInput(num_rooms=args.rooms, num_meetings=args.meetings)
     # TODO:
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
-    site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=args.ratio)
+    # site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=args.ratio)
+    site.load_meeting_requests(['data/truth_requests_20191123.csv'], ratio=args.ratio)
     site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()
@@ -51,11 +53,12 @@ def main():
                                 for potential_noisy_room in rooms:
                                     if potential_noisy_room != r \
                                             and room_cap[potential_noisy_room] >= meeting_sizes[noisy_meeting] \
-                                            and room_names[potential_noisy_room] in networkx.neighbors(g_rooms, room_names[r]):
-                                        model.Add(bookings[(noisy_meeting, t, potential_noisy_room)] == False).OnlyEnforceIf(
+                                            and room_names[potential_noisy_room] in networkx.neighbors(g_rooms,
+                                                                                                       room_names[r]):
+                                        model.Add(
+                                            bookings[(noisy_meeting, t, potential_noisy_room)] == False).OnlyEnforceIf(
                                             bookings[(m.name, t, r.name)]
                                         )
-
 
     # class PartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
     #     """Print intermediate solutions."""
@@ -79,13 +82,9 @@ def main():
     start_time = datetime.now()
     print("start at " + str(start_time))
 
-    # Minimize room cap wastage
-    #model.Minimize(sum((r.room_cap - m.size) * bookings[(m.name, t, r.name)]
-    #                   for m in meetings for t in all_timeslots for r in rooms))
-
     site.printConfig(print_rooms=False, print_timeslots=False)
 
-    status, solution = site.resolve()
+    status, solution = site.resolve(max_time=args.maxTime, no_min_waste=args.noMinWaste)
     if status != 'INFEASIBLE':
         site.print_one_solution(solution)
         site.export_solution(solution, "result.csv")
@@ -130,7 +129,6 @@ def main():
     print("end at " + str(end_time))
     print("duration: " + str(end_time - start_time))
 
+
 if __name__ == "__main__":
     main()
-
-# --timeslots 10 --rooms 21 --meetings 98

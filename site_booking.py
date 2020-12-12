@@ -160,7 +160,7 @@ class Site:
                             'Sizes of meeting at time {t}: \n{s}'.format(t=t, s=str([x[1] for x in sizes_sorted]))
                         raise MeetingRequestError(msg, {"code": self.CHECK_FAILED_MEETING_SIZE, "timeslot": t})
 
-    def createBookingModel(self, solution=None, ignore_piano=False):
+    def createBookingModel(self, solution=None, ignore_piano=False, no_min_waste=False):
         print(f"createBookingModel: start - {datetime.now()}")
 
         model = cp_model.CpModel()
@@ -225,6 +225,10 @@ class Site:
                 for r in self.rooms:
                     if r.room_cap < m.size:
                         model.Add(bookings[getid(m, t, r)] == 0)
+                    elif False and r.room_cap - m.size > 90:
+                        # TODO:
+                        # Experiment: don't waste these branches
+                        model.Add(bookings[getid(m, t, r)] == 0)
 
         # A meeting must use the same room in all its required timeslots
         # (e.g. if meeting 1 span two timeslots, then ...)
@@ -260,6 +264,16 @@ class Site:
                     # 若大房已 book, 細房不能 book, or vice versa
                     model.Add(sum(bookings_temp) <= 1)
 
+            # TODO: we assume 拆細房 should be avoided?
+            model.Minimize(sum(bookings[getid(m, t, r)]
+                               for m in self.meetings for t in self.timeslots for r in small_rooms))
+
+        if not no_min_waste:
+            print("Minimize waste")
+            # Minimize room space waste
+            model.Minimize(sum((r.room_cap - m.size) * bookings[getid(m, t, r)]
+                               for m in self.meetings for t in self.timeslots for r in self.rooms))
+
         print(f"createBookingModel: end - {datetime.now()}")
 
         return model, bookings
@@ -289,10 +303,11 @@ class Site:
             for m in self.meetings:
                 for r in self.rooms:
                     if getid(m, t, r) in solution["alloc"]:
-                        if r.name not in df:
-                            df[r.name] = ""
+                        room = f'{r.name} ({r.room_cap})'
+                        if room not in df:
+                            df[room] = ""
 
-                        df.at[i, r.name] = m.name
+                        df.at[i, room] = f'{m.name} ({m.size}) (-{r.room_cap-m.size})'
 
         room_cols = set(df.columns)
         room_cols.remove('Time')
@@ -339,9 +354,13 @@ class Site:
         print()
         print("Meeting allocated total: {}".format(len(booking_allocated)))
 
-    def resolve(self, ignore_piano=False, past_solution=None):
-        model, bookings = self.createBookingModel(solution=past_solution, ignore_piano=ignore_piano)
+    def resolve(self, ignore_piano=False, past_solution=None, max_time=180, no_min_waste=False):
+        model, bookings = self.createBookingModel(solution=past_solution, ignore_piano=ignore_piano,
+                                                  no_min_waste=no_min_waste)
         self._lastBookings = bookings
+
+        self._solver.parameters.max_time_in_seconds = max_time
+
         status = self._solver.Solve(model)
         status = self._solver.StatusName(status)
         self._lastStatus = status
