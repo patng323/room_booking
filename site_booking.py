@@ -314,10 +314,6 @@ class Site:
         for t, i in zip(self.timeslots, range(len(self.timeslots))):
             df = df.append({'Time': Util.timeslot_to_str(t)}, ignore_index=True)
             for m in self.meetings:
-                has_room_specified_already = False
-                if m.room:
-                    has_room_specified_already = True
-
                 for r in self.rooms:
                     if getid(m, t, r) in solution["alloc"]:
                         room = f'{r.name} ({r.room_cap})'
@@ -326,8 +322,8 @@ class Site:
 
                         waste = r.room_cap - m.size
                         s = f'{m.name} ({m.size}) (-{waste})'
-                        if m.fixed or has_room_specified_already:
-                            s += " *"
+                        if m.fixed or m.room:
+                            s += " *"  # Fixed, or has room specified in the request already
                         elif waste > 10:
                             print(f"Big waste detected: {Util.timeslot_to_str(t)} - {s}")
 
