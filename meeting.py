@@ -30,6 +30,7 @@ class Meeting:
 
     def __init__(self, name, meetings,
                  room=None,
+                 room_id=None,
                  size=0, min_size=0,
                  fixed=False,
                  needs_piano=False,
@@ -41,6 +42,7 @@ class Meeting:
         self.__meetings = meetings  # Parent object
 
         self.room = room  # Pre-assigned room
+        self.room_id = room_id
 
         self.__size = size
         # if the requested size is 8-10 ppl, then size=10, and minSize=8

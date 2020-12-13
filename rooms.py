@@ -2,6 +2,7 @@
 import string
 import random
 from util import Util
+from rmbs import Rmbs
 
 feature_ids = {
     "投影機": 1,
@@ -19,26 +20,23 @@ class Room:
 
 
 class Rooms:
-    # TODO:
-    # Extra properties:
-    # - location (Truth building)
     def __init__(self):
         self.max_cap = 0
         self._rooms_dict = dict()
         self.rooms_combined = []
 
-    def load_site_info(self, name):
-        df_building_info = Util.load_data(f"data/building_info_{name}.csv")
+    def load_site_info(self, rmbs: Rmbs, area: int):
+        df_building_info = rmbs.read_rooms(area)
         self.max_cap = 0
         for info in df_building_info.itertuples():
-            assert info.room not in self._rooms_dict, "same room shouldn't appear twice in input file"
-            room = Room(room_cap=info.size, name=info.room)
-            if info.size > self.max_cap:
-                self.max_cap = info.size
+            assert info.room_name not in self._rooms_dict, "same room shouldn't appear twice in input file"
+            room = Room(room_cap=info.capacity, name=info.room_name)
+            if info.capacity > self.max_cap:
+                self.max_cap = info.capacity
 
-            self._rooms_dict[info.room] = room
+            self._rooms_dict[info.room_name] = room
 
-        rooms_combined_info = Util.load_rooms_combined_info(f"data/rooms_combined_info_{name}.csv")
+        rooms_combined_info = Util.load_rooms_combined_info(f"data/rooms_combined_info_{area}.csv")
         for combined in rooms_combined_info:
             large_room_cap = 0
             small_rooms = []

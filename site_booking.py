@@ -2,7 +2,7 @@ from collections import defaultdict
 from rooms import Rooms
 from meetings import Meetings, Meeting
 from ortools.sat.python import cp_model
-from datetime import datetime
+from datetime import datetime, date
 from util import Util, MeetingRequestError
 import pandas as pd
 import numpy as np
@@ -17,8 +17,9 @@ class Site:
     CHECK_FAILED_NO_OF_MEETINGS = -2
     CHECK_FIXED_ROOM_CONFLICT = -3
 
-    def __init__(self, name, num_timeslots=None):
-        self.name = name
+    def __init__(self, rmbs, area: int, num_timeslots=None):
+        self.rmbs = rmbs
+        self.area = area
 
         if num_timeslots is None:
             # let's assume 8am to 10pm right now
@@ -38,16 +39,25 @@ class Site:
 
     def load_site_info(self):
         self.rooms = Rooms()
-        self.rooms.load_site_info(self.name)
+        self.rooms.load_site_info(self.rmbs, self.area)
 
-    def load_meeting_requests(self, paths, ratio=1.0):
+    def load_existing_meetings(self, meeting_date: date, ratio=1.0):
         assert self.rooms is not None
         self.meetings = Meetings(site=self)
-        self.meetings.load_meeting_requests(paths, ratio)
+        self.meetings.load_meeting_requests(self.rmbs, self.area, meeting_date, ratio)
         for m in self.meetings:
             assert m.room is None or m.room in self.rooms.room_names, f"Room '{m.room}' is not found"
 
         self.detect_related_meetings()
+
+    def load_new_requests(self, path):
+        df = pd.read_csv(path)
+        print(f"Records read: {len(df)}")
+        for request in df.itertuples():
+            name = request.name
+            start, end = Util.parse_time_field(request.time)
+            size, min_size = Util.parse_size(request.size)
+            self.addMeeting(name, size, start_time=start, end_time=end)
 
     def detect_related_meetings(self):
         all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)
@@ -59,9 +69,9 @@ class Site:
         self.meetings = Meetings(site=self)
         self.meetings.genRandomInput(num_meetings)
 
-    def addMeeting(self, name, size, start_time, duration, needs_piano=False):
+    def addMeeting(self, name, size, start_timeslot=None, start_time=None, end_time=None, duration=None, needs_piano=False):
         meeting = Meeting(name=name, size=size, meetings=self.meetings, needs_piano=needs_piano,
-                          start_timeslot=start_time, duration=duration)
+                          start_timeslot=start_timeslot, start_time=start_time, end_time=end_time, duration=duration)
         self.meetings.add_meeting(meeting)
         self.__timeslot_requests = None
 

@@ -1,8 +1,8 @@
 #!/Users/patrickng/anaconda3/envs/py36/bin/python
 import random
-from datetime import datetime
-import pandas as pd
+from datetime import datetime, date
 from site_booking import Site
+from rmbs import Rmbs
 import argparse
 
 random.seed(1234)
@@ -13,6 +13,7 @@ def main():
     # parser.add_argument("--timeslots", type=int, default=24)
     # parser.add_argument("--rooms", type=int, default=50)
     # parser.add_argument("--meetings", type=int, default=20)
+    parser.add_argument("--date", type=str, required=True)
     parser.add_argument("--ratio", type=float, default=1.0)
     parser.add_argument("--noMinWaste", action="store_true")
     parser.add_argument("--maxTime", help="Max. resolving time in sec", type=int, default=180)
@@ -27,13 +28,15 @@ def main():
     # g_rooms.add_edge("A", "B")
     # g_rooms.add_edge("B", "C")
 
-    site = Site(name="truth")
+    rmbs = Rmbs()
+    site = Site(rmbs, area=Rmbs.Area_Truth)
+
     # site.genRandomInput(num_rooms=args.rooms, num_meetings=args.meetings)
     # TODO:
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
-    site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=args.ratio)
-    # site.load_meeting_requests(['data/truth_requests_20191123.csv'], ratio=args.ratio)
+    site.load_existing_meetings(ratio=args.ratio, meeting_date=datetime.strptime(args.date, "%Y-%m-%d").date())
+    site.load_new_requests('data/truth_requests_20201107.csv')
     site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()
@@ -115,7 +118,7 @@ def main():
     if status != 'INFEASIBLE' and False:
         print("----------------------")
         print("Let's add one more room :-)")
-        site.addMeeting(name="patrick", size=10, start_time=0, duration=4)
+        site.addMeeting(name="patrick", size=10, start_timeslot=0, duration=4)
         site.printConfig(print_rooms=False, print_timeslots=False)
         status, solution = site.resolve(past_solution=solution)
         print(f"Status == {status}")

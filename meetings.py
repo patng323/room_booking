@@ -3,6 +3,8 @@ import argparse
 import pandas as pd
 from util import Util
 from meeting import Meeting
+from rmbs import Rmbs
+from datetime import date, datetime
 
 
 class Meetings:
@@ -24,41 +26,31 @@ class Meetings:
     def max_timeslot(self):
         return self._site.max_timeslot
 
-    def load_meeting_requests(self, paths, ratio=1.0):
-        for path in paths:
-            if path:
-                df = Util.load_data(path, ratio)
-                print(f"Records read: {len(df)}")
-                for request in df.itertuples():
-                    name = request.name
-                    start, end = Util.parse_time_field(request.time)
+    def load_meeting_requests(self, rmbs: Rmbs, area: int, meeting_date: date, ratio=1.0):
+        df = rmbs.read_meetings(area, meeting_date)
+        if ratio < 1.0:
+            df = df.head(n=int(len(df) * ratio))
 
-                    if 'fixed' in df.columns:
-                        fixed = request.fixed == 1
-                    else:
-                        fixed = False
+        print(f"Records read: {len(df)}")
+        for request in df.itertuples():
+            name = request.name
+            start = datetime.fromtimestamp(request.start_time)
+            end = datetime.fromtimestamp(request.end_time)
 
-                    if 'size' in df.columns:
-                        size, min_size = Util.parse_size(request.size)
-                    else:
-                        size = min_size = 0  # No size is specified for this meeting; it's for fixed booking
+            fixed = True
 
-                    # Note: the room field may contains multiple rooms.  E.g. 'G11, G12, G13'
-                    # For the sake of room allocation, each room will be treated as a separate booking
-                    rooms = [None]
-                    if request.room and type(request.room) == str:
-                        rooms = request.room.replace(', ', ',').split(',')
-                        rooms = list(filter(lambda r: len(r.strip()) > 0, rooms))
-                        assert len(rooms) > 0
+            # TODO: may need to parse the meeting size from the description
+            size = min_size = 0  # No size is specified for this meeting; it's for fixed booking
 
-                    for room, i in zip(rooms, range(len(rooms))):
-                        meeting = Meeting(name=name, meetings=self,
-                                          size=size, min_size=min_size,
-                                          fixed=fixed,
-                                          room=room,
-                                          start_time=start, end_time=end)
-                        meeting.id = len(self._meetings)
-                        self._meetings.append(meeting)
+            meeting = Meeting(name=name, meetings=self,
+                              size=size, min_size=min_size,
+                              fixed=fixed,
+                              room=request.room,
+                              room_id=request.room_id,
+                              start_time=start, end_time=end)
+
+            meeting.id = request.id
+            self._meetings.append(meeting)
 
     def add_meeting(self, meeting):
         self._meetings.append(meeting)

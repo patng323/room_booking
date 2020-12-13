@@ -2,6 +2,7 @@
 import re
 from datetime import datetime, timedelta
 import pandas as pd
+from rmbs import Rmbs
 
 _startTime = datetime(year=1900, month=1, day=1, hour=8, minute=0)
 
@@ -66,18 +67,6 @@ class Util:
             size = int(parts[1])
 
         return size, min_size
-
-    @staticmethod
-    def load_data(path: str, ratio=1.0):
-        assert 0 < ratio <= 1.0
-        df_building_info = pd.read_csv(path)
-        if ratio < 1.0:
-            df_building_info = df_building_info.head(n=int(len(df_building_info) * ratio))
-        if 'room' in df_building_info.columns:
-            df_building_info['room'] = df_building_info.apply(
-                lambda row: row['room'].replace(' ', '').strip() if type(row['room']) == str else row['room'], axis=1)
-
-        return df_building_info
 
     @staticmethod
     def load_rooms_combined_info(path: str):
