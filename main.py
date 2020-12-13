@@ -32,8 +32,8 @@ def main():
     # TODO:
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
-    # site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=args.ratio)
-    site.load_meeting_requests(['data/truth_requests_20191123.csv'], ratio=args.ratio)
+    site.load_meeting_requests(['data/truth_fixed_20191123.csv', 'data/truth_requests_20191123.csv'], ratio=args.ratio)
+    # site.load_meeting_requests(['data/truth_requests_20191123.csv'], ratio=args.ratio)
     site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()
@@ -86,7 +86,7 @@ def main():
 
     status, solution = site.resolve(max_time=args.maxTime, no_min_waste=args.noMinWaste)
     if status != 'INFEASIBLE':
-        site.print_one_solution(solution)
+        #site.print_one_solution(solution)
         site.export_solution(solution, "result.csv")
     else:
         print()

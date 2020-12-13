@@ -164,12 +164,21 @@ class Site:
     def checkRoomFit(room, meeting):
         if room.room_cap < meeting.size:
             return False
-        elif meeting.size <= 15:
-            return room.room_cap <= 30
+        elif meeting.size <= 10:
+            return room.room_cap <= 50
         elif meeting.size <= 30:
-            return room.room_cap <= 80
+            return room.room_cap <= 100
         else:
             return True
+
+    @staticmethod
+    def bookingWaste(room, meeting):
+        waste = room.room_cap - meeting.size
+
+        if waste <= 5:
+            return 0
+
+        return int((room.room_cap / meeting.size) * 10)
 
     @staticmethod
     def getBooking(bookings, model, meeting, time, room):
@@ -183,13 +192,7 @@ class Site:
         print(f"createBookingModel: start - {datetime.now()}")
 
         model = cp_model.CpModel()
-    
         bookings = {}
-        # for m in self.meetings:
-        #     for r in self.rooms:
-        #         for t in self.timeslots:
-        #             # bookings[id(m, t, r] = 1 if meeting m has booked room r at time t
-        #             bookings[getid(m, t, r)] = model.NewBoolVar('{}'.format(getid(m, t, r)))
 
         # If we have a set of allocations we should follow, let's set condition for them first
         if solution:
@@ -235,13 +238,6 @@ class Site:
                     # Each room can be assigned only to one meeting
                     model.Add(sum(bookings_temp) <= 1)
 
-        # The room capacity must fit the meeting size
-        # for m in self.meetings:
-        #     for r in self.rooms:
-        #         if not (r.room_cap < m.size or (r.room_cap >= 60 and m.size <= 15)):
-        #             for t in m.meeting_times:
-        #                 model.Add(bookings[getid(m, t, r)] == 0)
-
         # A meeting must use the same room in all its required timeslots
         # (e.g. if meeting 1 span two timeslots, then ...)
         for m in self.meetings:
@@ -282,13 +278,12 @@ class Site:
         #                        for m in self.meetings for t in self.timeslots for r in small_rooms))
 
         if not no_min_waste:
-            print("Minimize waste")
-            # Minimize room space waste
-            model.Minimize(sum((r.room_cap - m.size) * bookings[getid(m, t, r)]
+            print("Minimize room space waste")
+            model.Minimize(sum(self.bookingWaste(r, m) * bookings[getid(m, t, r)]
                                for m in self.meetings
                                for t in self.timeslots
                                for r in self.rooms
-                               if getid(m, t, r) in bookings))
+                               if getid(m, t, r) in bookings and m.room is None and not m.fixed))
 
         print(f"createBookingModel: end - {datetime.now()}")
 
@@ -329,9 +324,13 @@ class Site:
                         if room not in df:
                             df[room] = ""
 
-                        s = f'{m.name} ({m.size}) (-{r.room_cap-m.size})'
-                        if has_room_specified_already:
+                        waste = r.room_cap - m.size
+                        s = f'{m.name} ({m.size}) (-{waste})'
+                        if m.fixed or has_room_specified_already:
                             s += " *"
+                        elif waste > 10:
+                            print(f"Big waste detected: {Util.timeslot_to_str(t)} - {s}")
+
                         df.at[i, room] = s
 
         room_cols = set(df.columns)
