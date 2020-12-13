@@ -48,6 +48,8 @@ class Meetings:
                     rooms = [None]
                     if request.room and type(request.room) == str:
                         rooms = request.room.replace(', ', ',').split(',')
+                        rooms = list(filter(lambda r: len(r.strip()) > 0, rooms))
+                        assert len(rooms) > 0
 
                     for room, i in zip(rooms, range(len(rooms))):
                         meeting = Meeting(name=name, meetings=self,

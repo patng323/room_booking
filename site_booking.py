@@ -160,85 +160,98 @@ class Site:
                             'Sizes of meeting at time {t}: \n{s}'.format(t=t, s=str([x[1] for x in sizes_sorted]))
                         raise MeetingRequestError(msg, {"code": self.CHECK_FAILED_MEETING_SIZE, "timeslot": t})
 
+    @staticmethod
+    def checkRoomFit(room, meeting):
+        if room.room_cap < meeting.size:
+            return False
+        elif meeting.size <= 15:
+            return room.room_cap <= 30
+        elif meeting.size <= 30:
+            return room.room_cap <= 80
+        else:
+            return True
+
+    @staticmethod
+    def getBooking(bookings, model, meeting, time, room):
+        id = getid(meeting, time, room)
+        if id not in bookings:
+            bookings[id] = model.NewBoolVar('{}'.format(id))
+
+        return bookings[id]
+
     def createBookingModel(self, solution=None, ignore_piano=False, no_min_waste=False):
         print(f"createBookingModel: start - {datetime.now()}")
 
         model = cp_model.CpModel()
     
         bookings = {}
-        for m in self.meetings:
-            for t in self.timeslots:
-                for r in self.rooms:
-                    # bookings[id(m, t, r] = 1 if meeting m has booked room r at time t
-                    bookings[getid(m, t, r)] = model.NewBoolVar('{}'.format(getid(m, t, r)))
+        # for m in self.meetings:
+        #     for r in self.rooms:
+        #         for t in self.timeslots:
+        #             # bookings[id(m, t, r] = 1 if meeting m has booked room r at time t
+        #             bookings[getid(m, t, r)] = model.NewBoolVar('{}'.format(getid(m, t, r)))
 
         # If we have a set of allocations we should follow, let's set condition for them first
-        # TODO: will they conflict with 'fixed' meetings?
         if solution:
             print("createBookingModel: we have a past solution to follow")
-            for t in self.timeslots:
-                for m in self.meetings:
-                    for r in self.rooms:
+            for m in self.meetings:
+                for r in self.rooms:
+                    for t in self.timeslots:
                         if getid(m, t, r) in solution["alloc"]:
                             # This exact [meeting, timeslot, room] combination has been set in the past solution
-                            model.Add(bookings[getid(m, t, r)] == 1)
+                            model.Add(self.getBooking(bookings, model, m, t, r) == 1)
 
         # A meeting must happen at its specified time slots
         for m in self.meetings:
             for t in self.timeslots:
                 if t in m.meeting_times:
-                    # Set conditions for meetings with room specified
                     if m.room and len(m.room.strip()) > 0:
+                        # The meeting already has a room specified
                         room_found = False
                         for r in self.rooms:
                             if m.room == r.name:
-                                model.Add(bookings[getid(m, t, self.rooms.get_room(m.room))] == 1)
+                                model.Add(self.getBooking(bookings, model, m, t, self.rooms.get_room(m.room)) == 1)
                                 room_found = True
-                            else:
-                                # Make sure we don't book other rooms
-                                model.Add(bookings[getid(m, t, r)] == 0)
+                                break
 
                         assert room_found, f'The room specified in {str(m)} cannot be found'
                     else:
                         # if meeting m needs timeslot t, we need to book exactly one room at timeslot t
-                        model.Add(sum(bookings[getid(m, t, r)] for r in self.rooms) == 1)
-                else:
-                    # Meeting m doesn't need this timeslot.  So don't assign it to any room at timeslot t
-                    for r in self.rooms:
-                        model.Add(bookings[getid(m, t, r)] == 0)
-    
-        # No two meetings can share the same room
+                        # for those rooms that fit the size
+                        model.Add(
+                            sum(self.getBooking(bookings, model, m, t, r)
+                                for r in self.rooms
+                                if self.checkRoomFit(r, m)) == 1)
+
+        # A room cannot hold more than one meeting
         for t in self.timeslots:
             for r in self.rooms:
                 bookings_temp = []
                 for m in self.meetings:
-                    if t in m.meeting_times:
-                        bookings_temp.append(bookings[getid(m, t, r)])
+                    if self.checkRoomFit(r, m) and t in m.meeting_times:
+                        bookings_temp.append(self.getBooking(bookings, model, m, t, r))
 
                 if len(bookings_temp) > 0:
                     # Each room can be assigned only to one meeting
                     model.Add(sum(bookings_temp) <= 1)
-    
+
         # The room capacity must fit the meeting size
-        for m in self.meetings:
-            for t in m.meeting_times:
-                for r in self.rooms:
-                    if r.room_cap < m.size:
-                        model.Add(bookings[getid(m, t, r)] == 0)
-                    elif False and r.room_cap - m.size > 90:
-                        # TODO:
-                        # Experiment: don't waste these branches
-                        model.Add(bookings[getid(m, t, r)] == 0)
+        # for m in self.meetings:
+        #     for r in self.rooms:
+        #         if not (r.room_cap < m.size or (r.room_cap >= 60 and m.size <= 15)):
+        #             for t in m.meeting_times:
+        #                 model.Add(bookings[getid(m, t, r)] == 0)
 
         # A meeting must use the same room in all its required timeslots
         # (e.g. if meeting 1 span two timeslots, then ...)
         for m in self.meetings:
             for r in self.rooms:
-                for i in range(len(m.meeting_times) - 1):
-                    # For room r, if the current timeslot is TRUE, then the next one must be true too
-                    model.Add(bookings[getid(m, m.meeting_times[i + 1], r)] == True).OnlyEnforceIf(
-                        bookings[getid(m, m.meeting_times[i], r)])
-    
+                if self.checkRoomFit(r, m):
+                    for i in range(len(m.meeting_times) - 1):
+                        # For room r, if the current timeslot is TRUE, then the next one must be true too
+                        model.Add(self.getBooking(bookings, model, m, m.meeting_times[i + 1], r) == True).OnlyEnforceIf(
+                            self.getBooking(bookings, model, m, m.meeting_times[i], r))
+
         if not ignore_piano:
             # A room which requires piano must use a room that has a piano
             for m in self.meetings:
@@ -249,30 +262,33 @@ class Site:
 
         # Experiment 細房合併
         # Two groups of rooms cannot be booked at the same time
-        for combined_info in self.rooms.rooms_combined:
-            small_rooms = combined_info['small_rooms']
-            large_room = combined_info['large_room']
-
-            for t in self.timeslots:
-                for small_room in small_rooms:
-                    bookings_temp = []
-                    for m in self.meetings:
-                        if t in m.meeting_times:
-                            bookings_temp.append(bookings[getid(m, t, large_room)])
-                            bookings_temp.append(bookings[getid(m, t, small_room)])
-
-                    # 若大房已 book, 細房不能 book, or vice versa
-                    model.Add(sum(bookings_temp) <= 1)
-
-            # TODO: we assume 拆細房 should be avoided?
-            model.Minimize(sum(bookings[getid(m, t, r)]
-                               for m in self.meetings for t in self.timeslots for r in small_rooms))
+        # for combined_info in self.rooms.rooms_combined:
+        #     small_rooms = combined_info['small_rooms']
+        #     large_room = combined_info['large_room']
+        #
+        #     for t in self.timeslots:
+        #         for small_room in small_rooms:
+        #             bookings_temp = []
+        #             for m in self.meetings:
+        #                 if t in m.meeting_times:
+        #                     bookings_temp.append(bookings[getid(m, t, large_room)])
+        #                     bookings_temp.append(bookings[getid(m, t, small_room)])
+        #
+        #             # 若大房已 book, 細房不能 book, or vice versa
+        #             model.Add(sum(bookings_temp) <= 1)
+        #
+        #     # TODO: we assume 拆細房 should be avoided?
+        #     model.Minimize(sum(bookings[getid(m, t, r)]
+        #                        for m in self.meetings for t in self.timeslots for r in small_rooms))
 
         if not no_min_waste:
             print("Minimize waste")
             # Minimize room space waste
             model.Minimize(sum((r.room_cap - m.size) * bookings[getid(m, t, r)]
-                               for m in self.meetings for t in self.timeslots for r in self.rooms))
+                               for m in self.meetings
+                               for t in self.timeslots
+                               for r in self.rooms
+                               if getid(m, t, r) in bookings))
 
         print(f"createBookingModel: end - {datetime.now()}")
 
@@ -288,11 +304,13 @@ class Site:
 
     def save_one_solution(self):
         allocations = []
-        for t in self.timeslots:
-            for m in self.meetings:
-                for r in self.rooms:
-                    if self._solver.Value(self._lastBookings[getid(m, t, r)]):
-                        allocations.append(getid(m, t, r))
+        for m in self.meetings:
+            for r in self.rooms:
+                for t in self.timeslots:
+                    id = getid(m, t, r)
+                    if id in self._lastBookings:
+                        if self._solver.Value(self._lastBookings[id]):
+                            allocations.append(getid(m, t, r))
 
         return {"alloc": allocations}
 
@@ -301,13 +319,20 @@ class Site:
         for t, i in zip(self.timeslots, range(len(self.timeslots))):
             df = df.append({'Time': Util.timeslot_to_str(t)}, ignore_index=True)
             for m in self.meetings:
+                has_room_specified_already = False
+                if m.room:
+                    has_room_specified_already = True
+
                 for r in self.rooms:
                     if getid(m, t, r) in solution["alloc"]:
                         room = f'{r.name} ({r.room_cap})'
                         if room not in df:
                             df[room] = ""
 
-                        df.at[i, room] = f'{m.name} ({m.size}) (-{r.room_cap-m.size})'
+                        s = f'{m.name} ({m.size}) (-{r.room_cap-m.size})'
+                        if has_room_specified_already:
+                            s += " *"
+                        df.at[i, room] = s
 
         room_cols = set(df.columns)
         room_cols.remove('Time')
