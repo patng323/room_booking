@@ -8,15 +8,15 @@ from datetime import date, datetime
 
 
 class Meetings:
-    # TODO:
-    # Extra properties:
-    # - location (Truth building)
+    # Represents all the meetings to be held in a site
+    #
+    #
 
     def __init__(self, site):
         self._meetings = []
         self.num_meetings = 0
-        self._site = site
-        self.use_min_size = False
+        self._site = site  # The site in which the meetings are held
+        self.use_min_size = False  # TODO: do we still need this var??
 
     @property
     def max_room_size(self):
@@ -29,7 +29,7 @@ class Meetings:
     def load_meeting_requests(self, rmbs: Rmbs, area: int, meeting_date: date, ratio=1.0):
         df = rmbs.read_meetings(area, meeting_date)
         if ratio < 1.0:
-            df = df.head(n=int(len(df) * ratio))
+            df = df.head(n=int(len(df) * ratio))  # Use just a portion of the loaded meetings; mainly for test purpose
 
         print(f"Records read: {len(df)}")
         for request in df.itertuples():
@@ -37,9 +37,9 @@ class Meetings:
             start = datetime.fromtimestamp(request.start_time)
             end = datetime.fromtimestamp(request.end_time)
 
-            fixed = True
+            fixed = True  # fixed == True means the meeting can't be moved anymore
 
-            # TODO: may need to parse the meeting size from the description
+            # TODO: may need to parse the meeting size from the description (TODO: still need to do that?)
             size = min_size = 0  # No size is specified for this meeting; it's for fixed booking
 
             meeting = Meeting(name=name, meetings=self,
@@ -49,7 +49,7 @@ class Meetings:
                               room_id=request.room_id,
                               start_time=start, end_time=end)
 
-            meeting.id = request.id
+            meeting.id = request.id  # ID is the meeting ID in DB
             self._meetings.append(meeting)
 
     def add_meeting(self, meeting):
@@ -60,9 +60,6 @@ class Meetings:
 
     def __iter__(self):
         for meeting in self._meetings:
-            if meeting.suppressed:
-                continue
-
             yield meeting
 
     def __getitem__(self, key):

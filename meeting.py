@@ -37,11 +37,11 @@ class Meeting:
                  start_timeslot=None, duration=None,
                  start_time=None, end_time=None):
         self.name = name
-        self.unit = get_unit_from_name(name)  # 單位
+        self.unit = get_unit_from_name(name)  # 單位; e.g. 傷健科 : 尊主團
 
         self.__meetings = meetings  # Parent object
 
-        self.room = room  # Pre-assigned room
+        self.room = room.strip() if room else None  # Pre-assigned room
         self.room_id = room_id
 
         self.__size = size
@@ -51,9 +51,7 @@ class Meeting:
 
         self.fixed = fixed
 
-        self.__needs_piano = needs_piano
-        self.__piano_suppressed = False
-        self.suppressed = False
+        self.__needs_piano = needs_piano  # TODO: to be replaced by a generic equipment array
 
         self.__start_timeslot = 0
         self.__duration = 0
@@ -76,19 +74,9 @@ class Meeting:
             self.set_time(start_timeslot,
                           duration=end_timeslot - start_timeslot)
 
-    def suppress_piano(self, suppress=True):
-        self.__piano_suppressed = suppress
-
-    @property
-    def piano_suppressed(self):
-        return self.__piano_suppressed
-
     @property
     def needs_piano(self):
-        if self.__piano_suppressed:
-            return False
-        else:
-            return self.__needs_piano
+        return self.__needs_piano
 
     @needs_piano.setter
     def needs_piano(self, val):
@@ -112,7 +100,7 @@ class Meeting:
         self.__start_timeslot = start_time
         if start_time + duration - 1 > self.__meetings.max_timeslot:
             if truncate:
-                duration = self.__meetings.max_timeslot - start_time + 1
+                duration = self.__meetings.max_timeslot - start_time + 1  # Truncate the meeting duration
             else:
                 raise Exception("start_time + duration has passed the max_timeslot allowed")
 

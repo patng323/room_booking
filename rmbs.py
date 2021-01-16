@@ -111,6 +111,7 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
         finally:
             dbConnection.close()
 
+        df['room_name'] = df['room_name'].apply(lambda x: x.strip())
         return df
 
     def read_meetings(self, area: int, meeting_date: date):
@@ -151,4 +152,5 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
 
 if __name__ == "__main__":
     rmbs = Rmbs()
-    rmbs.read_rooms(6)
+    #rmbs.read_rooms(6)
+    rmbs.test()

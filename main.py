@@ -13,9 +13,9 @@ def main():
     # parser.add_argument("--timeslots", type=int, default=24)
     # parser.add_argument("--rooms", type=int, default=50)
     # parser.add_argument("--meetings", type=int, default=20)
-    parser.add_argument("--date", type=str, required=True)
-    parser.add_argument("--ratio", type=float, default=1.0)
-    parser.add_argument("--noMinWaste", action="store_true")
+    parser.add_argument("--date", type=str, help="The date used to load meetings from RMBS. Format: YYYY-MM-DD", required=True)
+    parser.add_argument("--ratio", help="How much of the input is used?  Mainly for testing.", type=float, default=1.0)
+    parser.add_argument("--noMinWaste", help="If set, then we will skip minWaste optimization", action="store_true")
     parser.add_argument("--maxTime", help="Max. resolving time in sec", type=int, default=180)
     args = parser.parse_args()
 
@@ -36,7 +36,7 @@ def main():
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
     site.load_existing_meetings(ratio=args.ratio, meeting_date=datetime.strptime(args.date, "%Y-%m-%d").date())
-    site.load_new_requests('data/truth_requests_20201107.csv')
+    site.load_new_requests('data/truth_requests_20201107.csv')  # TODO: should read from forms (maybe indirectly)
     site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()
@@ -94,38 +94,6 @@ def main():
     else:
         print()
         print("Solve returns: " + status)
-        if False:
-            print("Let's try ignoring piano for all meetings")
-            print()
-            status, solution = site.resolve(ignore_piano=True)
-            if status != 'INFEASIBLE':
-                print("It works without piano; so let's figure out which meeting is the culprit")
-                print("We start by suppressing piano, starting with the smallest meeting")
-                print()
-                mtgs = site.meetings_which_need_piano()
-                mtgs = sorted(mtgs, key=lambda mtg: mtg.size)
-                for mtg in mtgs:
-                    mtg.suppress_piano()
-                    print("Suppress piano for meeting {} and try allocating:".format(mtg.name))
-                    try:
-                        status, solution = site.resolve()
-                        if status != 'INFEASIBLE':
-                            site.print_one_solution(solution)
-                            break
-                    finally:
-                        mtg.suppress_piano(False)
-
-    if status != 'INFEASIBLE' and False:
-        print("----------------------")
-        print("Let's add one more room :-)")
-        site.addMeeting(name="patrick", size=10, start_timeslot=0, duration=4)
-        site.printConfig(print_rooms=False, print_timeslots=False)
-        status, solution = site.resolve(past_solution=solution)
-        print(f"Status == {status}")
-        if status != 'INFEASIBLE':
-            site.print_one_solution(solution)
-            site.export_solution(solution, "result.csv")
-        print("----------------------")
 
     site.printStats()
     end_time = datetime.now()

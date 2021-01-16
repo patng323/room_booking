@@ -19,7 +19,7 @@ class Site:
 
     def __init__(self, rmbs, area: int, num_timeslots=None):
         self.rmbs = rmbs
-        self.area = area
+        self.area = area  # In RMBS, area represents a "building".  E.g. 教育樓
 
         if num_timeslots is None:
             # let's assume 8am to 10pm right now
@@ -34,17 +34,17 @@ class Site:
         self.__timeslot_requests = None
         self._solver = cp_model.CpSolver()
         self._solver.parameters.linearization_level = 0
-        self._lastBookings = None
+        self._lastBookings = None  # the solutions from the last CP solver
         self._lastStatus = None
 
     def load_site_info(self):
-        self.rooms = Rooms()
-        self.rooms.load_site_info(self.rmbs, self.area)
+        self.rooms = Rooms()  # Rooms represent all the rooms in a site
+        self.rooms.load_site_info(self.rmbs, self.area)  # Load all the room info from DB
 
     def load_existing_meetings(self, meeting_date: date, ratio=1.0):
-        assert self.rooms is not None
+        assert self.rooms is not None, "Can't be called until all room info was loaded already"
         self.meetings = Meetings(site=self)
-        self.meetings.load_meeting_requests(self.rmbs, self.area, meeting_date, ratio)
+        self.meetings.load_meeting_requests(self.rmbs, self.area, meeting_date, ratio)  # Load meetings info from DB
         for m in self.meetings:
             assert m.room is None or m.room in self.rooms.room_names, f"Room '{m.room}' is not found"
 
@@ -57,10 +57,10 @@ class Site:
             name = request.name
             start, end = Util.parse_time_field(request.time)
             size, min_size = Util.parse_size(request.size)
-            self.addMeeting(name, size, start_time=start, end_time=end)
+            self.addMeeting(name, size, min_size=min_size, start_time=start, end_time=end)
 
     def detect_related_meetings(self):
-        all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)
+        all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)  # TODO: WIP.  E.g. Two 連貫 meetings: 馬其頓團契練歌，馬其頓團契
 
     def genRandomInput(self, num_rooms, num_meetings):
         self.rooms = Rooms()
@@ -69,8 +69,8 @@ class Site:
         self.meetings = Meetings(site=self)
         self.meetings.genRandomInput(num_meetings)
 
-    def addMeeting(self, name, size, start_timeslot=None, start_time=None, end_time=None, duration=None, needs_piano=False):
-        meeting = Meeting(name=name, size=size, meetings=self.meetings, needs_piano=needs_piano,
+    def addMeeting(self, name, size, min_size=0, start_timeslot=None, start_time=None, end_time=None, duration=None):
+        meeting = Meeting(name=name, size=size, min_size=min_size, meetings=self.meetings,
                           start_timeslot=start_timeslot, start_time=start_time, end_time=end_time, duration=duration)
         self.meetings.add_meeting(meeting)
         self.__timeslot_requests = None
@@ -172,6 +172,7 @@ class Site:
 
     @staticmethod
     def checkRoomFit(room, meeting):
+        # By avoiding assigning BIG rooms to SMALL meeting, we reduce the number of branches when calcuating the soln.
         if room.room_cap < meeting.size:
             return False
         elif meeting.size <= 10:
@@ -186,6 +187,7 @@ class Site:
         waste = room.room_cap - meeting.size
 
         if waste <= 5:
+            # Help reduce number of branches
             return 0
 
         return int((room.room_cap / meeting.size) * 10)
@@ -198,7 +200,7 @@ class Site:
 
         return bookings[id]
 
-    def createBookingModel(self, solution=None, ignore_piano=False, no_min_waste=False):
+    def createBookingModel(self, solution=None, no_min_waste=False):
         print(f"createBookingModel: start - {datetime.now()}")
 
         model = cp_model.CpModel()
@@ -218,7 +220,7 @@ class Site:
         for m in self.meetings:
             for t in self.timeslots:
                 if t in m.meeting_times:
-                    if m.room and len(m.room.strip()) > 0:
+                    if m.room:
                         # The meeting already has a room specified
                         room_found = False
                         for r in self.rooms:
@@ -258,7 +260,7 @@ class Site:
                         model.Add(self.getBooking(bookings, model, m, m.meeting_times[i + 1], r) == True).OnlyEnforceIf(
                             self.getBooking(bookings, model, m, m.meeting_times[i], r))
 
-        if not ignore_piano:
+        if False:  # Facility checking
             # A room which requires piano must use a room that has a piano
             for m in self.meetings:
                 for t in m.meeting_times:
@@ -358,10 +360,7 @@ class Site:
                         booking_allocated.add(m.name)
                         extra_rm = mtg_times_info = final_info = ''
                         name = str(m.name)
-                        if m.piano_suppressed:
-                            name += "(PX)"
-                            final_info = " piano suppressed"
-                        elif m.needs_piano:
+                        if m.needs_piano:
                             name += "(P)"
                             if not r.has_piano:
                                 final_info = " !! piano not fulfilled"
@@ -384,8 +383,8 @@ class Site:
         print()
         print("Meeting allocated total: {}".format(len(booking_allocated)))
 
-    def resolve(self, ignore_piano=False, past_solution=None, max_time=180, no_min_waste=False):
-        model, bookings = self.createBookingModel(solution=past_solution, ignore_piano=ignore_piano,
+    def resolve(self, past_solution=None, max_time=180, no_min_waste=False):
+        model, bookings = self.createBookingModel(solution=past_solution,
                                                   no_min_waste=no_min_waste)
         self._lastBookings = bookings
 
