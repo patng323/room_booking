@@ -7,6 +7,7 @@ import os
 import csv
 import pandas as pd
 from datetime import date, timedelta
+import re
 
 _queries = {
     "mrbs_area": '''
@@ -38,7 +39,7 @@ CONVERT(BINARY CONVERT(description USING latin1) USING utf8) as description,
 CONVERT(BINARY CONVERT(equipment USING latin1) USING utf8) as equipment,
 capacity,room_admin_email
 FROM mrbs.mrbs_room ''',
-    
+
     "mrbs_repeat": '''
 SELECT
 id,start_time,end_time,rep_type,end_date,rep_opt,room_id,timestamp,create_by,
@@ -46,7 +47,19 @@ CONVERT(BINARY CONVERT(name USING latin1) USING utf8) as name,
 type,
 CONVERT(BINARY CONVERT(description USING latin1) USING utf8) as description,
 rep_num_weeks,rep_spec_week,rep_date
-FROM mrbs.mrbs_repeat '''
+FROM mrbs.mrbs_repeat ''',
+
+    "mrbs_facility_type": '''
+SELECT 
+id, CONVERT(BINARY CONVERT(type USING latin1) USING utf8) as type, area 
+FROM mrbs_facility_type ''',
+
+    "mrbs_facility_with_names": '''
+SELECT f.id, f.room_id, CONVERT(BINARY CONVERT(r.room_name USING latin1) USING utf8) as room_name, 
+facility_type_id, CONVERT(BINARY CONVERT(ft.type USING latin1) USING utf8) as facility
+FROM mrbs_facility f JOIN mrbs_facility_type ft on f.facility_type_id=ft.id
+JOIN mrbs_room r on f.room_id = r.id
+    '''
 }
 
 
@@ -88,39 +101,63 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
 
         connection.commit()
 
-    def sqlEngine_connect(self):
-        sqlEngine = create_engine(f'mysql+pymysql://{self.user}:{self.password}@{self.host}/{self.database}',
-                                  pool_recycle=3600)
-        return sqlEngine.connect()
+    def _sqlEngine(self):
+        return create_engine(f'mysql+pymysql://{self.user}:{self.password}@{self.host}/{self.database}',
+                             pool_recycle=3600)
 
     def read_areas(self):
-        dbConnection = self.sqlEngine_connect()
+        dbConnection = self._sqlEngine().connect()
         try:
             frame = pd.read_sql(_queries['mrbs_area'], dbConnection)
             pd.set_option('display.expand_frame_repr', False)
             print(frame)
         finally:
             dbConnection.close()
+
+    @staticmethod
+    def _massage_room_name(name):
+        # Massage room name.  E.g. T 1 --> T1
+        return re.sub(r'^([A-Z]) (\d{1,2})$', r'\g<1>\g<2>', name).strip()
         
     def read_rooms(self, area: int):
-        dbConnection = self.sqlEngine_connect()
+        dbConnection = self._sqlEngine().connect()
         try:
             # TODO: how to handle capacity=0 cases?
             df = pd.read_sql(_queries['mrbs_room'] + f'where area_id={area} and '
                                                      f'!(room_name="T35" and capacity = 0)', dbConnection)
+            df['room_name'] = df['room_name'].apply(self._massage_room_name)
         finally:
             dbConnection.close()
 
-        df['room_name'] = df['room_name'].apply(lambda x: x.strip())
         return df
 
     def read_meetings(self, area: int, meeting_date: date):
-        dbConnection = self.sqlEngine_connect()
+        dbConnection = self._sqlEngine().connect()
         try:
             next_day = meeting_date + timedelta(days=1)
             df = pd.read_sql(_queries['mrbs_entry_join_room'] +
                              f'where r.area_id={area} and e.start_time >={meeting_date.strftime("%s")} and '
                              f'e.end_time < {next_day.strftime("%s")}', dbConnection)
+        finally:
+            dbConnection.close()
+
+        return df
+
+    def read_facility_types(self):
+        dbConnection = self._sqlEngine().connect()
+        try:
+            df = pd.read_sql(_queries['mrbs_facility_type'], dbConnection)
+        finally:
+            dbConnection.close()
+
+        df['type'] = df['type'].apply(lambda x: x.strip())
+        return df
+
+    def read_facility(self):
+        dbConnection = self._sqlEngine().connect()
+        try:
+            df = pd.read_sql(_queries['mrbs_facility_with_names'], dbConnection)
+            df['room_name'] = df['room_name'].apply(self._massage_room_name)
         finally:
             dbConnection.close()
 
@@ -149,8 +186,23 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
 
         db.close()
 
+    def insert_fac_data(self, area, data_file):
+        df_rooms = self.read_rooms(area)
+        df_truth_import = pd.read_csv(data_file)
+        df = pd.merge(df_truth_import,
+                      df_rooms.query(f'area_id=={area}')[['room_name', 'id']].rename({'id': 'room_id'}, axis=1),
+                      left_on='地點', right_on='room_name')
+
+        df_fac_types = self.read_facility_types()
+        df2 = pd.merge(df, df_fac_types.query(f'area=={area}').rename({'id': 'facility_type_id'}, axis=1),
+                       left_on='fac', right_on='type')
+        df2 = df2[['room_id', 'facility_type_id']]
+
+        df2.to_sql('mrbs_facility', self._sqlEngine(), index=False, if_exists='append')
+
 
 if __name__ == "__main__":
     rmbs = Rmbs()
-    #rmbs.read_rooms(6)
-    rmbs.test()
+    #rmbs.insert_fac_data(Rmbs.Area_Truth, 'data/truth_fac_import.csv')
+    df = rmbs.read_facility()
+    print('done')
