@@ -42,6 +42,7 @@ class Meetings:
             # TODO: may need to parse the meeting size from the description (TODO: still need to do that?)
             size = min_size = 0  # No size is specified for this meeting; it's for fixed booking
 
+            # Note: for meeting which has already been assigned to a room, we don't care about its required facilities
             meeting = Meeting(name=name, meetings=self,
                               size=size, min_size=min_size,
                               fixed=fixed,
@@ -94,9 +95,6 @@ class Meetings:
 
             meeting.size = random.randint(2, self.max_room_size)
             start_time = random.randint(0, self.max_timeslot)
-
-            if random.randint(1, 100) >= 80:
-                meeting.needs_piano = True
 
             rn = random.randint(1, 100)
             if rn <= 50:

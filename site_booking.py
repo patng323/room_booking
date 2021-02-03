@@ -53,11 +53,24 @@ class Site:
     def load_new_requests(self, path):
         df = pd.read_csv(path)
         print(f"Records read: {len(df)}")
+
+        fac_types = self.rmbs.read_facility_types().query(f'area_id == {self.area}')['type'].to_list()
         for request in df.itertuples():
             name = request.name
             start, end = Util.parse_time_field(request.time)
             size, min_size = Util.parse_size(request.size)
-            self.addMeeting(name, size, min_size=min_size, start_time=start, end_time=end)
+
+            facilities = request.facilities
+            if pd.isna(facilities):
+                facilities = None
+            else:
+                facilities = facilities.split(",")
+                facilities = [x.strip() for x in facilities]
+                for fac in facilities:
+                    assert fac in fac_types, f"{name} requested facility {fac} is not found in DB"
+
+            self.addMeeting(name, size, min_size=min_size, start_time=start, end_time=end,
+                            facilities=facilities)
 
     def detect_related_meetings(self):
         all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)  # TODO: WIP.  E.g. Two 連貫 meetings: 馬其頓團契練歌，馬其頓團契
@@ -69,9 +82,11 @@ class Site:
         self.meetings = Meetings(site=self)
         self.meetings.genRandomInput(num_meetings)
 
-    def addMeeting(self, name, size, min_size=0, start_timeslot=None, start_time=None, end_time=None, duration=None):
+    def addMeeting(self, name, size, min_size=0, start_timeslot=None, start_time=None, end_time=None, duration=None,
+                   facilities=None):
         meeting = Meeting(name=name, size=size, min_size=min_size, meetings=self.meetings,
-                          start_timeslot=start_timeslot, start_time=start_time, end_time=end_time, duration=duration)
+                          start_timeslot=start_timeslot, start_time=start_time, end_time=end_time, duration=duration,
+                          facilities=facilities)
         self.meetings.add_meeting(meeting)
         self.__timeslot_requests = None
 
@@ -98,24 +113,21 @@ class Site:
         if print_meetings:
             print("---------------\n")
             for meeting in self.meetings:
-                piano = ''
-                if meeting.needs_piano:
-                    piano = '(P)'
-
                 name = meeting.name
                 if meeting.unit:
                     name += f" <{meeting.unit}>"
                 if meeting.room:
                     name += f" : {meeting.room}"
-                print(f"Meeting {name}: size={meeting.size}{piano}, timeslots={str(meeting.meeting_times)}")
+                print(f"Meeting {name}: size={meeting.size}, timeslots={str(meeting.meeting_times)}")
 
         if print_rooms:
             print("---------------\n")
             for room in self.rooms:
-                piano = ''
-                if room.has_piano:
-                    piano = '(P)'
-                print("Room {rn}: cap={cap} {piano}".format(rn=room.name, cap=room.room_cap, piano=piano))
+                if room.facilities:
+                    fac = f'[{",".join(room.facilities)}]'
+                else:
+                    fac = ''
+                print(f"Room {room.name}: cap={room.room_cap} {fac}")
 
         if print_timeslots:
             print("---------------\n")
@@ -260,13 +272,17 @@ class Site:
                         model.Add(self.getBooking(bookings, model, m, m.meeting_times[i + 1], r) == True).OnlyEnforceIf(
                             self.getBooking(bookings, model, m, m.meeting_times[i], r))
 
-        if False:  # Facility checking
-            # A room which requires piano must use a room that has a piano
-            for m in self.meetings:
-                for t in m.meeting_times:
-                    for r in self.rooms:
-                        if m.needs_piano and not r.has_piano:
-                            model.Add(bookings[getid(m, t, r)] == 0)  # if the room as no piano, don't assign
+        # Facility checking
+        for m in self.meetings:
+            if m.room:
+                continue
+            for t in m.meeting_times:
+                for r in self.rooms:
+                    if m.facilities:
+                        has_all_fac = all([needed_fac in r.facilities for needed_fac in m.facilities])
+                        if not has_all_fac:
+                            # if the room doesn't have all needed facility, don't allow it to hold the meeting
+                            model.Add(self.getBooking(bookings, model, m, t, r) == 0)
 
         # Experiment 細房合併
         # Two groups of rooms cannot be booked at the same time
@@ -300,14 +316,6 @@ class Site:
         print(f"createBookingModel: end - {datetime.now()}")
 
         return model, bookings
-
-    def meetings_which_need_piano(self):
-        res = []
-        for m in self.meetings:
-            if m.needs_piano:
-                res.append(m)
-
-        return res
 
     def save_one_solution(self):
         allocations = []
@@ -360,13 +368,6 @@ class Site:
                         booking_allocated.add(m.name)
                         extra_rm = mtg_times_info = final_info = ''
                         name = str(m.name)
-                        if m.needs_piano:
-                            name += "(P)"
-                            if not r.has_piano:
-                                final_info = " !! piano not fulfilled"
-
-                        if r.has_piano:
-                            extra_rm = 'P'
 
                         if len(m.meeting_times) > 1:
                             if m.meeting_times[0] == t:

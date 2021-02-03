@@ -33,7 +33,7 @@ class Meeting:
                  room_id=None,
                  size=0, min_size=0,
                  fixed=False,
-                 needs_piano=False,
+                 facilities=None,
                  start_timeslot=None, duration=None,
                  start_time=None, end_time=None):
         self.name = name
@@ -51,7 +51,7 @@ class Meeting:
 
         self.fixed = fixed
 
-        self.__needs_piano = needs_piano  # TODO: to be replaced by a generic equipment array
+        self.facilities = facilities
 
         self.__start_timeslot = 0
         self.__duration = 0
@@ -73,14 +73,6 @@ class Meeting:
             # That explains why we don't need to "add one" to the duration parameter below
             self.set_time(start_timeslot,
                           duration=end_timeslot - start_timeslot)
-
-    @property
-    def needs_piano(self):
-        return self.__needs_piano
-
-    @needs_piano.setter
-    def needs_piano(self, val):
-        self.__needs_piano = val
 
     @property
     def size(self):

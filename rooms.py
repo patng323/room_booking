@@ -1,22 +1,15 @@
 # -*- coding: utf-8 -*-
-import string
-import random
 from util import Util
 from rmbs import Rmbs
 
-feature_ids = {
-    "投影機": 1,
-    "鋼琴": 2,
-    "副堂": 3,
-}
 
 class Room:
     MAX_SIZE = 300  # TODO: temp
 
-    def __init__(self, room_cap=0, has_piano=False, name=None):
+    def __init__(self, room_cap=0, name=None, facilities=[]):
         self.room_cap = room_cap
-        self.has_piano = False  # TODO: replaced by an array
         self.name = name
+        self.facilities = facilities
 
 
 class Rooms:
@@ -27,10 +20,13 @@ class Rooms:
 
     def load_site_info(self, rmbs: Rmbs, area: int):
         df_building_info = rmbs.read_rooms(area)
+        df_room_fac = rmbs.read_facility(area)
         self.max_cap = 0
         for info in df_building_info.itertuples():
             assert info.room_name not in self._rooms_dict, "same room shouldn't appear twice in input file"
-            room = Room(room_cap=info.capacity, name=info.room_name)
+
+            facilities = df_room_fac.query(f'room_id == {info.id}')['facility'].to_list()
+            room = Room(room_cap=info.capacity, name=info.room_name, facilities=facilities)
             if info.capacity > self.max_cap:
                 self.max_cap = info.capacity
 
@@ -62,19 +58,6 @@ class Rooms:
 
     def get_room(self, name):
         return self._rooms_dict[name]
-
-    def genRandomInput(self, num_rooms=20):
-        for rm in range(num_rooms):
-            room = Room()
-            room.name = string.ascii_letters[rm]
-            room.room_cap = random.randint(8, 12)
-
-            self.max_cap = max(room.room_cap, self.max_cap)
-            self._rooms_dict[room.name] = room
-
-        for room in self.rooms:
-            if room.room_cap >= (self.max_cap - 3):
-                room.has_piano = True
 
     def __iter__(self):
         for room in self.rooms:
