@@ -282,7 +282,7 @@ class Site:
                             model.Add(self.getBooking(bookings, model, m, t, r) == 0)
 
         # All the things we want to minimize
-        to_minimizes = []
+        to_minimize = []
 
         # 細房 and the combined 大房 cannot be booked at the same time
         for combined_info in self.rooms.combined_rooms:
@@ -293,39 +293,42 @@ class Site:
             whole_day_bookings_for_large_room = []
 
             for t in self.timeslots:
+                booking_large = self.getBooking(bookings, model, m, t, large_room)
+                # Boost the cost factor, so that it has higher priority over "room waste" during minimize
+                whole_day_bookings_for_large_room.append(50 * booking_large)
+
                 for small_room in small_rooms:
-                    # In a particular timeslot t, if a 細房 is booked, then 大房 can't be booked, or vice versa.
+                    # All the bookings for this small room and its corresponding large room at time t
                     bookings_temp = []
                     for m in self.meetings:
                         if t in m.meeting_times:
-                            booking = self.getBooking(bookings, model, m, t, large_room)
-                            # Boost the cost factor, so that it has higher priority over "room waste" during minimize
-                            whole_day_bookings_for_large_room.append(100*booking)
-                            bookings_temp.append(booking)
+                            bookings_temp.append(booking_large)
 
-                            booking = self.getBooking(bookings, model, m, t, small_room)
+                            booking_small = self.getBooking(bookings, model, m, t, small_room)
                             # Boost the cost factor, so that it has higher priority over "room waste" during minimize
-                            whole_day_bookings_for_small_rooms.append(100*booking)
-                            bookings_temp.append(booking)
+                            whole_day_bookings_for_small_rooms.append(50 * booking_small)
+                            bookings_temp.append(booking_small)
 
+                    # At this timeslot, the 細房 and its corresponding 大房 can't be booked at the same time.
                     model.Add(sum(bookings_temp) <= 1)
 
             if combined_info['normal'] == 'combined':
                 # Throughout the whole day, 拆細房 should be avoided
-                to_minimizes.extend(whole_day_bookings_for_small_rooms)
+                to_minimize.extend(whole_day_bookings_for_small_rooms)
             else:
                 assert combined_info['normal'] == 'split'
                 # Throughout the whole day, 變大房 should be avoided
-                to_minimizes.extend(whole_day_bookings_for_large_room)
+                to_minimize.extend(whole_day_bookings_for_large_room)
 
-        print("Minimize room space waste")
-        to_minimizes.extend(self.bookingWaste(r, m) * bookings[getid(m, t, r)]
+        # Minimize room space waste
+        to_minimize.extend(self.bookingWaste(r, m) * bookings[getid(m, t, r)]
                            for m in self.meetings
                            for t in self.timeslots
                            for r in self.rooms
                            if getid(m, t, r) in bookings and m.room is None and not m.fixed)
 
-        model.Minimize(sum(to_minimizes))
+        # Now call model.Minimize to minimize everything
+        model.Minimize(sum(to_minimize))
 
         print(f"createBookingModel: end - {datetime.now()}")
 
