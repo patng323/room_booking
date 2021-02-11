@@ -16,9 +16,11 @@ class Rooms:
     def __init__(self):
         self.max_cap = 0
         self._rooms_dict = dict()
-        self.rooms_combined = []
+        self.combined_rooms = []
 
     def load_site_info(self, rmbs: Rmbs, area: int):
+
+        # Load room info from database
         df_building_info = rmbs.read_rooms(area)
         df_room_fac = rmbs.read_facility(area)
         self.max_cap = 0
@@ -32,17 +34,19 @@ class Rooms:
 
             self._rooms_dict[info.room_name] = room
 
-        rooms_combined_info = Util.load_rooms_combined_info(f"data/rooms_combined_info_{area}.csv")
-        for combined in rooms_combined_info:
-            large_room_cap = 0
+        # Also add combined room info
+        rooms_combined_info = Util.load_rooms_combined_info(area)
+        for info in rooms_combined_info:
+            combined_room_cap = 0
             small_rooms = []
-            for room in combined:
+            for room in info['rooms']:
                 small_rooms.append(self._rooms_dict[room])
-                large_room_cap += self._rooms_dict[room].room_cap
+                combined_room_cap += self._rooms_dict[room].room_cap
 
-            large_room = Room(room_cap=large_room_cap, name="+".join(combined))
-            self._rooms_dict[large_room.name] = large_room
-            self.rooms_combined.append({'large_room': large_room, 'small_rooms': small_rooms})
+            combined_room = Room(room_cap=combined_room_cap, name="+".join(info['rooms']))
+            self._rooms_dict[combined_room.name] = combined_room
+            self.combined_rooms.append({'combined_room': combined_room, 'small_rooms': small_rooms,
+                                        'normal': info['normal']})
 
     @property
     def num_rooms(self):

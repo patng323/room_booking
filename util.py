@@ -69,14 +69,14 @@ class Util:
         return size, min_size
 
     @staticmethod
-    def load_rooms_combined_info(path: str):
-        df = pd.read_csv(path)
+    def load_rooms_combined_info(area: int):
+        df = pd.read_csv(f"data/rooms_combined_info_area_{area}.csv")
         rooms_combined_info = []
-        for rooms in df['rooms'].to_list():
-            info = []
-            for room in rooms.split(','):
+        for row in df.itertuples():
+            info = {'normal': row.normal, 'rooms': []}
+            for room in row.rooms.split(','):
                 room = room.strip().replace(' ', '')
-                info.append(room)
+                info['rooms'].append(room)
 
             rooms_combined_info.append(info)
 
