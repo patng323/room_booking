@@ -170,7 +170,7 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
         return df
 
     def dump(self):
-        folder = f"dumps/{datetime.now().strftime('%Y-%m-%d-%H%M')}"
+        folder = f"../dumps/{datetime.now().strftime('%Y-%m-%d-%H%M')}"
         os.makedirs(folder, exist_ok=True)
 
         db = connect(self.host, self.user, self.password, self.database)

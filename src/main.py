@@ -36,7 +36,7 @@ def main():
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
     site.load_existing_meetings(ratio=args.ratio, meeting_date=datetime.strptime(args.date, "%Y-%m-%d").date())
-    site.load_new_requests('data/truth_requests_20201107.csv')  # TODO: should read from forms (maybe indirectly)
+    site.load_new_requests('../data/truth_requests_20201107.csv')  # TODO: should read from forms (maybe indirectly)
     site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()

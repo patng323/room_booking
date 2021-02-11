@@ -70,7 +70,7 @@ class Util:
 
     @staticmethod
     def load_rooms_combined_info(area: int):
-        df = pd.read_csv(f"data/rooms_combined_info_area_{area}.csv")
+        df = pd.read_csv(f"../data/rooms_combined_info_area_{area}.csv")
         rooms_combined_info = []
         for row in df.itertuples():
             info = {'normal': row.normal, 'rooms': []}
