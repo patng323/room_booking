@@ -1,4 +1,3 @@
-#!/Users/patrickng/anaconda3/envs/py36/bin/python
 import random
 from datetime import datetime, date
 from site_booking import Site

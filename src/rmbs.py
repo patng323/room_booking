@@ -1,4 +1,3 @@
-#!/Users/patrickng/anaconda3/envs/py36/bin/python
 import yaml
 from sqlalchemy import create_engine
 from pymysql import connect

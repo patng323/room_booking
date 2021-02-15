@@ -1,0 +1,7 @@
+python=3.9.1
+pip
+numpy
+pandas
+PyMySQL
+PyYAML
+SQLAlchemy
