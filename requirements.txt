@@ -1,7 +1,7 @@
-python=3.9.1
+python=3.7
 pip
 numpy
 pandas
-PyMySQL
+PyMySQL=0.10.1
 PyYAML
 SQLAlchemy

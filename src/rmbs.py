@@ -1,11 +1,10 @@
 import yaml
 from sqlalchemy import create_engine
 from pymysql import connect
-from datetime import datetime
 import os
 import csv
 import pandas as pd
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 import re
 
 _queries = {
@@ -62,6 +61,10 @@ JOIN mrbs_room r on f.room_id = r.id
 }
 
 
+def _to_epoch(dt):
+    return int(dt.timestamp())
+
+
 class Rmbs:
     # 1: 康澤
     # 2: 真理樓
@@ -87,8 +90,8 @@ class Rmbs:
     def test(self):
         connection = connect(host=self.host, user=self.user, password=self.password, db=self.database, charset='utf8')
         with connection.cursor() as cursor:
-            start_time = datetime.strptime("2020-12-13 10:00:00", "%Y-%m-%d %H:%M:%S").strftime("%s")
-            end_time = datetime.strptime("2020-12-13 10:30:00", "%Y-%m-%d %H:%M:%S").strftime("%s")
+            start_time = _to_epoch(datetime.strptime("2020-12-13 10:00:00", "%Y-%m-%d %H:%M:%S"))
+            end_time = _to_epoch(datetime.strptime("2020-12-13 10:30:00", "%Y-%m-%d %H:%M:%S"))
             name = "大食會's 時間！"
             description = "係咁食\n之後就太飽了."
             # Create a new record
@@ -101,7 +104,7 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
         connection.commit()
 
     def _sqlEngine(self):
-        return create_engine(f'mysql+pymysql://{self.user}:{self.password}@{self.host}/{self.database}',
+        return create_engine(f'mysql+pymysql://{self.user}:{self.password}@{self.host}/{self.database}?charset=utf8',
                              pool_recycle=3600)
 
     def read_areas(self):
@@ -135,8 +138,8 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
         try:
             next_day = meeting_date + timedelta(days=1)
             df = pd.read_sql(_queries['mrbs_entry_join_room'] +
-                             f'where r.area_id={area} and e.start_time >={meeting_date.strftime("%s")} and '
-                             f'e.end_time < {next_day.strftime("%s")}', dbConnection)
+                             f'where r.area_id={area} and e.start_time >={_to_epoch(meeting_date)} and '
+                             f'e.end_time < {_to_epoch(next_day)}', dbConnection)
         finally:
             dbConnection.close()
 
@@ -210,6 +213,7 @@ def _main():
     rmbs = Rmbs()
     #rmbs.insert_fac_data(Rmbs.Area_Truth, 'data/truth_fac_import.csv')
     df = rmbs.read_facility()
+    print(df)
     print('done')
 
 
