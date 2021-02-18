@@ -62,6 +62,9 @@ JOIN mrbs_room r on f.room_id = r.id
 
 
 def _to_epoch(dt):
+    if type(dt) == date:
+        dt = datetime(year=dt.year, month=dt.month, day=dt.day)
+
     return int(dt.timestamp())
 
 
