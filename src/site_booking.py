@@ -31,6 +31,7 @@ class Site:
 
         self.rooms = None
         self.meetings = None
+        self.requests = []
         self.__timeslot_requests = None
         self._solver = cp_model.CpSolver()
         self._solver.parameters.linearization_level = 0
@@ -74,8 +75,9 @@ class Site:
                 for fac in facilities:
                     assert fac in fac_types, f"{name} requested facility {fac} is not found in DB"
 
-            self.addMeeting(name, size, min_size=min_size, start_time=start, end_time=end,
-                            facilities=facilities)
+            meeting = self.addMeeting(name, size, min_size=min_size, start_time=start, end_time=end,
+                                      facilities=facilities)
+            self.requests.append(meeting)
 
     def detect_related_meetings(self):
         all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)  # TODO: WIP.  E.g. Two 連貫 meetings: 馬其頓團契練歌，馬其頓團契
@@ -94,6 +96,8 @@ class Site:
                           facilities=facilities)
         self.meetings.add_meeting(meeting)
         self.__timeslot_requests = None
+
+        return meeting
 
     @property
     def max_room_size(self):
@@ -381,6 +385,110 @@ class Site:
         cols.extend(room_cols)
 
         df[cols].to_csv(fn, index=False, na_rep='', encoding='utf_8_sig')
+
+    def export_new_bookings(self, solution, filename=None):
+        df = pd.DataFrame(columns=["Name", "Time", "Require", "Size", "Room", "Cap", "Cap_Real", "Facilities"])
+
+        for m in self.meetings:
+            if m.fixed:
+                continue
+
+            for r in self.rooms:
+                times = []
+                for t in self.timeslots:
+                    if getid(m, t, r) in solution["alloc"]:
+                        times.append(t)
+
+                if times:
+                    df = df.append({"Name": m.name, "Size": m.size,
+                                    "Time": Util.timeslot_to_str([times[0], times[-1]+1]),
+                                    "Require": "" if not m.facilities else ", ".join(m.facilities),
+                                    "Room": r.name,
+                                    "Facilities": "" if not r.facilities else ", ".join(r.facilities),
+                                    "Cap_Real": r.room_cap_original,
+                                    "Cap": r.room_cap},
+                                   ignore_index=True)
+
+                    break
+
+        if filename:
+            df.to_csv(filename, index=False, na_rep='', encoding='utf_8_sig')
+
+        return df
+
+    @staticmethod
+    def send_new_bookings_email(df_new_bookings: pd.DataFrame):
+        df_new_bookings = df_new_bookings.fillna("").rename(
+            {"Name": "名稱",
+             "Time": "時間",
+             "Require": "所需設備",
+             "Size": "人數",
+             "Room": "房間",
+             "Cap": "容量（2/3）",
+             "Cap_Real": "容量（全）",
+             "Facilities": "設備"},
+            axis='columns'
+        )
+
+        booking_table = df_new_bookings.to_html(index=False, justify='left', border=1)
+
+        html = f"""\
+<html>
+  <head>
+    <style> 
+        body {{font-size:10p}}
+        table, th, td {{font-size:10pt; border:1px solid black; border-collapse:collapse; text-align:left;}}
+        th, td {{padding: 5px;}}
+    </style>
+  </head>
+  房間預約自動分配結果
+  <br/><br/>
+  <body>
+  {booking_table}
+  </body>
+</html>
+"""
+
+        Util.send_email("房間預約分配結果 - 成功", html)
+
+    def send_no_solution_email(self):
+        df = pd.DataFrame(columns=["Name", "Time", "Require"])
+
+        for m in self.requests:
+            df = df.append({"Name": m.name, "Size": m.size,
+                            "Time": Util.timeslot_to_str([m.meeting_times[0], m.meeting_times[-1]+1]),
+                            "Require": "" if not m.facilities else ", ".join(m.facilities),
+                            "Size": m.size},
+                           ignore_index=True)
+
+        df = df.fillna("").rename(
+            {"Name": "名稱",
+             "Time": "時間",
+             "Require": "所需設備",
+             "Size": "人數"},
+            axis='columns'
+        )
+
+        booking_table = df.to_html(index=False, justify='left', border=1)
+
+        html = f"""\
+    <html>
+      <head>
+        <style> 
+            body {{font-size:10p}}
+            table, th, td {{font-size:10pt; border:1px solid black; border-collapse:collapse; text-align:left;}}
+            th, td {{padding: 5px;}}
+        </style>
+      </head>
+      房間預約自動分配結果: 未能成功分配
+      <br/><br/>
+      <body>
+      {booking_table}
+      </body>
+    </html>
+    """
+
+        Util.send_email("房間預約分配結果 - 失敗", html)
 
     def print_one_solution(self, solution):
         booking_allocated = set()

@@ -36,7 +36,7 @@ def main():
     site.load_site_info()
     site.load_existing_meetings(ratio=args.ratio, meeting_date=datetime.strptime(args.date, "%Y-%m-%d").date())
     site.load_new_requests('../data/truth_requests_20201107.csv')  # TODO: should read from forms (maybe indirectly)
-    site.printConfig(print_meetings=False, print_rooms=True)
+    #site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()
 
@@ -84,15 +84,18 @@ def main():
     start_time = datetime.now()
     print("start at " + str(start_time))
 
-    site.printConfig(print_rooms=False, print_timeslots=False)
+    #site.printConfig(print_rooms=False, print_timeslots=False)
 
     status, solution = site.resolve(max_time=args.maxTime, no_min_waste=args.noMinWaste)
     if status != 'INFEASIBLE':
         #site.print_one_solution(solution)
         site.export_solution(solution, "result.csv")
+        df_new_bookings = site.export_new_bookings(solution, filename="result_new_booking.csv")
+        site.send_new_bookings_email(df_new_bookings)
+
     else:
-        print()
         print("Solve returns: " + status)
+        site.send_no_solution_email()
 
     site.printStats()
     end_time = datetime.now()

@@ -84,7 +84,7 @@ class Rmbs:
 
     def __init__(self):
         with open('config.yaml', 'r') as f:
-            config = yaml.safe_load(f)
+            config = yaml.safe_load(f)["db"]
             self.host = config['host']
             self.user = config['user']
             self.password = config['password']
@@ -141,6 +141,8 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
     def read_meetings(self, area: int, meeting_date: date):
         dbConnection = self._sqlEngine().connect()
         try:
+            # note: in the DB, end_time means the beginning of the next timeslot.
+            #       E.g. if a room is booked from 5pm to 7pm, end_time = 7pm
             next_day = meeting_date + timedelta(days=1)
             df = pd.read_sql(_queries['mrbs_entry_join_room'] +
                              f'where r.area_id={area} and e.start_time >={_to_epoch(meeting_date)} and '

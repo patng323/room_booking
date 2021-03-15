@@ -2,7 +2,12 @@
 import re
 from datetime import datetime, timedelta
 import pandas as pd
-from rmbs import Rmbs
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import yaml
 
 _startTime = datetime(year=1900, month=1, day=1, hour=8, minute=0)
 
@@ -49,9 +54,14 @@ class Util:
         return _startTime + timedelta(minutes=value * 30)
 
     @staticmethod
-    def timeslot_to_str(value: int):
-        s = f"{datetime.strftime(Util.timeslot_to_dt(value), '%H:%M')} - " \
-            f"{datetime.strftime(Util.timeslot_to_dt(value) + timedelta(minutes=30), '%H:%M')}"
+    def timeslot_to_str(value):
+        if type(value) == int:
+            s = f"{datetime.strftime(Util.timeslot_to_dt(value), '%H:%M')} - " \
+                f"{datetime.strftime(Util.timeslot_to_dt(value) + timedelta(minutes=30), '%H:%M')}"
+        else:
+            assert type(value) == list and len(value) == 2
+            s = f"{datetime.strftime(Util.timeslot_to_dt(value[0]), '%H:%M')} - " \
+                f"{datetime.strftime(Util.timeslot_to_dt(value[1]), '%H:%M')}"
         return s
 
     @staticmethod
@@ -81,6 +91,44 @@ class Util:
             rooms_combined_info.append(info)
 
         return rooms_combined_info
+
+    @staticmethod
+    def read_smtp_config():
+        with open('config.yaml', 'r') as f:
+            config = yaml.safe_load(f)["smtp"]
+            host = config['host']
+            port = config['port']
+            user = config['user']
+            password = config['password']
+            sent_from = config['from']
+            sent_to = config['to']
+
+        return host, port, user, password, sent_from, sent_to
+
+    @staticmethod
+    def send_email(subject, html_body):
+        host, port, user, password, sent_from, sent_to = Util.read_smtp_config()
+
+        # The mail addresses and password
+        sender = sent_from
+        recipients = [x.strip() for x in sent_to.split(",")]
+
+        message = MIMEMultipart("alternative")
+        message["Subject"] = subject
+        message["From"] = sender
+        message["To"] = sent_to
+
+        part = MIMEText(html_body, 'html')
+        message.attach(part)
+
+        # For testing, check: https://mailtrap.io/inboxes
+        # Create SMTP session for sending the mail
+        with smtplib.SMTP(host, int(port)) as session:
+            session.starttls()  # enable security
+            session.login(user, password)
+            text = message.as_string()
+            session.sendmail(sender, recipients, text)
+            session.quit()
 
 
 class MeetingRequestError(Exception):
