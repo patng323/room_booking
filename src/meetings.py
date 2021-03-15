@@ -39,8 +39,7 @@ class Meetings:
 
             fixed = True  # fixed == True means the meeting can't be moved anymore
 
-            # TODO: may need to parse the meeting size from the description (TODO: still need to do that?)
-            size = min_size = 0  # No size is specified for this meeting; it's for fixed booking
+            size = min_size = 0  # No size will be specified for this meeting, and it's a fixed booking
 
             # Note: for meeting which has already been assigned to a room, we don't care about its required facilities
             meeting = Meeting(name=name, meetings=self,

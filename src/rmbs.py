@@ -127,10 +127,12 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
     def read_rooms(self, area: int):
         dbConnection = self._sqlEngine().connect()
         try:
-            # TODO: how to handle capacity=0 cases?
-            df = pd.read_sql(_queries['mrbs_room'] + f'where area_id={area} and '
-                                                     f'!(room_name="T35" and capacity = 0)', dbConnection)
+            # If capacity==0, we still read them; but they won't use them during auto-allocation due to its size
+            df = pd.read_sql(_queries['mrbs_room'] + f'where area_id={area} order by room_name, capacity', dbConnection)
             df['room_name'] = df['room_name'].apply(self._massage_room_name)
+
+            # Sometime the same room may appear twice, and we want to keep the one with the largest capacity.
+            df = df.drop_duplicates(subset='room_name', keep="last")
         finally:
             dbConnection.close()
 

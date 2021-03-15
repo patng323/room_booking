@@ -57,6 +57,11 @@ class Site:
         fac_types = self.rmbs.read_facility_types().query(f'area_id == {self.area}')['type'].to_list()
         for request in df.itertuples():
             name = request.name
+
+            if name.startswith("skip"):
+                print(f'Request {name} is skipped')
+                continue
+
             start, end = Util.parse_time_field(request.time)
             size, min_size = Util.parse_size(request.size)
 
@@ -184,7 +189,7 @@ class Site:
 
     @staticmethod
     def checkRoomFit(room, meeting):
-        # By avoiding assigning BIG rooms to SMALL meeting, we reduce the number of branches when calcuating the soln.
+        # By avoiding assigning BIG rooms to SMALL meeting, we reduce the number of branches when calculating the soln.
         if room.room_cap < meeting.size:
             return False
         elif meeting.size <= 10:
@@ -353,7 +358,9 @@ class Site:
             for m in self.meetings:
                 for r in self.rooms:
                     if getid(m, t, r) in solution["alloc"]:
-                        room = f'{r.name} ({r.room_cap})'
+                        room = f'{r.name} ({r.room_cap_original}/{r.room_cap})'
+                        if r.facilities:
+                            room += f' ({", ".join(r.facilities)})'
                         if room not in df:
                             df[room] = ""
 
