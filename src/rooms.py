@@ -7,16 +7,21 @@ import math
 class Room:
     MAX_SIZE = 300  # TODO: temp
 
-    def __init__(self, room_cap=0, name=None, facilities=[], small_rooms=[], room_cap_ratio=2/3):
+    def __init__(self, room_cap=0, name=None, id=None, facilities=[], small_rooms=[], room_cap_ratio=2/3):
         self.room_cap_original = room_cap
         self.name = name
         self.facilities = facilities
         self.room_cap_ratio = room_cap_ratio
         self.small_rooms = small_rooms
+        self.id = id  # It can be a list of ids if it's a combined room
 
     @property
     def room_cap(self):
         return math.ceil(self.room_cap_original * self.room_cap_ratio)
+
+    @property
+    def is_combined(self):
+        return len(self.small_rooms) > 0
 
 
 class Rooms:
@@ -35,7 +40,7 @@ class Rooms:
             assert info.room_name not in self._rooms_dict, f"same room ({info.room_name}) shouldn't appear from input"
 
             facilities = df_room_fac.query(f'room_id == {info.id}')['facility'].to_list()
-            room = Room(room_cap=info.capacity, name=info.room_name, facilities=facilities)
+            room = Room(room_cap=info.capacity, name=info.room_name, id=info.id, facilities=facilities)
             if info.capacity > self.max_cap:
                 self.max_cap = info.capacity
 
@@ -54,7 +59,7 @@ class Rooms:
                 facilities.extend(room_info.facilities)
 
             combined_room = Room(room_cap=combined_room_cap, name="+".join(info['rooms']),
-                                 facilities=facilities, small_rooms=small_rooms)
+                                 facilities=facilities, small_rooms=small_rooms, id=[r.id for r in small_rooms])
             self._rooms_dict[combined_room.name] = combined_room
             self.combined_rooms.append({'combined_room': combined_room, 'small_rooms': small_rooms,
                                         'normal': info['normal']})

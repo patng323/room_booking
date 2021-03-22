@@ -37,6 +37,7 @@ class Site:
         self._solver.parameters.linearization_level = 0
         self._lastBookings = None  # the solutions from the last CP solver
         self._lastStatus = None
+        self._dateLoaded = None
 
     def load_site_info(self):
         self.rooms = Rooms()  # Rooms represent all the rooms in a site
@@ -50,6 +51,7 @@ class Site:
             assert m.room is None or m.room in self.rooms.room_names, f"Room '{m.room}' is not found"
 
         self.detect_related_meetings()
+        self._dateLoaded = meeting_date
 
     def load_new_requests(self, path):
         df = pd.read_csv(path)
@@ -81,13 +83,6 @@ class Site:
 
     def detect_related_meetings(self):
         all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)  # TODO: WIP.  E.g. Two 連貫 meetings: 馬其頓團契練歌，馬其頓團契
-
-    def genRandomInput(self, num_rooms, num_meetings):
-        self.rooms = Rooms()
-        self.rooms.genRandomInput(num_rooms)
-
-        self.meetings = Meetings(site=self)
-        self.meetings.genRandomInput(num_meetings)
 
     def addMeeting(self, name, size, min_size=0, start_timeslot=None, start_time=None, end_time=None, duration=None,
                    facilities=None):
@@ -386,9 +381,10 @@ class Site:
 
         df[cols].to_csv(fn, index=False, na_rep='', encoding='utf_8_sig')
 
-    def export_new_bookings(self, solution, filename=None):
-        df = pd.DataFrame(columns=["Name", "Time", "Require", "Size", "Room", "Cap", "Cap_Real", "Facilities"])
+    def export_new_bookings(self, solution, filename=None, write_to_db=False):
+        df = pd.DataFrame(columns=["Date", "Name", "Time", "Require", "Size", "Room", "Cap", "Cap_Real", "Facilities"])
 
+        new_meetings_info = []
         for m in self.meetings:
             if m.fixed:
                 continue
@@ -400,7 +396,9 @@ class Site:
                         times.append(t)
 
                 if times:
-                    df = df.append({"Name": m.name, "Size": m.size,
+                    assert times == m.meeting_times
+                    df = df.append({"Date": self._dateLoaded.strftime("%Y-%m-%d"),
+                                    "Name": m.name, "Size": m.size,
                                     "Time": Util.timeslot_to_str([times[0], times[-1]+1]),
                                     "Require": "" if not m.facilities else ", ".join(m.facilities),
                                     "Room": r.name,
@@ -409,17 +407,24 @@ class Site:
                                     "Cap": r.room_cap},
                                    ignore_index=True)
 
+                    new_meetings_info.append({"meeting": m, "room": r})
                     break
 
         if filename:
             df.to_csv(filename, index=False, na_rep='', encoding='utf_8_sig')
 
-        return df
+        if write_to_db:
+            new_entry_ids = self.rmbs.insert_meetings(new_meetings_info, self._dateLoaded)
+        else:
+            new_entry_ids = []
+
+        return df, new_entry_ids
 
     @staticmethod
     def send_new_bookings_email(df_new_bookings: pd.DataFrame):
         df_new_bookings = df_new_bookings.fillna("").rename(
-            {"Name": "名稱",
+            {"Date": "日期",
+             "Name": "名稱",
              "Time": "時間",
              "Require": "所需設備",
              "Size": "人數",
@@ -452,17 +457,19 @@ class Site:
         Util.send_email("房間預約分配結果 - 成功", html)
 
     def send_no_solution_email(self):
-        df = pd.DataFrame(columns=["Name", "Time", "Require"])
+        df = pd.DataFrame(columns=["Date", "Name", "Time", "Require"])
 
         for m in self.requests:
-            df = df.append({"Name": m.name, "Size": m.size,
+            df = df.append({"Date": self._dateLoaded.strftime("%Y-%m-%d"),
+                            "Name": m.name, "Size": m.size,
                             "Time": Util.timeslot_to_str([m.meeting_times[0], m.meeting_times[-1]+1]),
                             "Require": "" if not m.facilities else ", ".join(m.facilities),
                             "Size": m.size},
                            ignore_index=True)
 
         df = df.fillna("").rename(
-            {"Name": "名稱",
+            {"Date": "日期",
+             "Name": "名稱",
              "Time": "時間",
              "Require": "所需設備",
              "Size": "人數"},

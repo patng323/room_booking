@@ -1,17 +1,15 @@
 import random
-from datetime import datetime, date
+from datetime import datetime
 from site_booking import Site
 from rmbs import Rmbs
 import argparse
+from util import Util
 
 random.seed(1234)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--timeslots", type=int, default=24)
-    # parser.add_argument("--rooms", type=int, default=50)
-    # parser.add_argument("--meetings", type=int, default=20)
     parser.add_argument("--date", type=str, help="The date used to load meetings from RMBS. Format: YYYY-MM-DD", required=True)
     parser.add_argument("--ratio", help="How much of the input is used?  Mainly for testing.", type=float, default=1.0)
     parser.add_argument("--noMinWaste", help="If set, then we will skip minWaste optimization", action="store_true")
@@ -27,16 +25,16 @@ def main():
     # g_rooms.add_edge("A", "B")
     # g_rooms.add_edge("B", "C")
 
+    Util.setup_logging()
+
     rmbs = Rmbs()
     site = Site(rmbs, area=Rmbs.Area_Truth)
 
-    # site.genRandomInput(num_rooms=args.rooms, num_meetings=args.meetings)
     # TODO:
     # Handle: G(地下禮堂+後區) in request
     site.load_site_info()
     site.load_existing_meetings(ratio=args.ratio, meeting_date=datetime.strptime(args.date, "%Y-%m-%d").date())
     site.load_new_requests('../data/truth_requests_20201107.csv')  # TODO: should read from forms (maybe indirectly)
-    #site.printConfig(print_meetings=False, print_rooms=True)
 
     site.basicCheck()
 
@@ -62,35 +60,17 @@ def main():
                                             bookings[(m.name, t, r.name)]
                                         )
 
-    # class PartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
-    #     """Print intermediate solutions."""
-    #
-    #     def __init__(self, bookings, sols):
-    #         cp_model.CpSolverSolutionCallback.__init__(self)
-    #         self._bookings = bookings
-    #         self._solutions = set(sols)
-    #         self._solution_count = 0
-    #
-    #     def on_solution_callback(self):
-    #         if self._solution_count in self._solutions:
-    #             print('Solution %i' % self._solution_count)
-    #             print_one_solution(self, self._bookings)
-    #             print()
-    #         self._solution_count += 1
-    #
-    #     def solution_count(self):
-    #         return self._solution_count
-
     start_time = datetime.now()
     print("start at " + str(start_time))
-
     #site.printConfig(print_rooms=False, print_timeslots=False)
 
     status, solution = site.resolve(max_time=args.maxTime, no_min_waste=args.noMinWaste)
     if status != 'INFEASIBLE':
         #site.print_one_solution(solution)
         site.export_solution(solution, "result.csv")
-        df_new_bookings = site.export_new_bookings(solution, filename="result_new_booking.csv")
+        df_new_bookings, new_meeting_ids = site.export_new_bookings(
+            solution, filename="result_new_booking.csv", write_to_db=True)
+        print(f'new meeting ids: {new_meeting_ids}')
         site.send_new_bookings_email(df_new_bookings)
 
     else:

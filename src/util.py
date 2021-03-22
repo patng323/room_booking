@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pandas as pd
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 import yaml
+import logging
+import logging.config
+import os
 
 _startTime = datetime(year=1900, month=1, day=1, hour=8, minute=0)
 
@@ -50,8 +51,10 @@ class Util:
                     (_startTime.hour * 60 + _startTime.minute)) / 30)
 
     @staticmethod
-    def timeslot_to_dt(value: int):
-        return _startTime + timedelta(minutes=value * 30)
+    def timeslot_to_dt(value: int, meeting_date: date = None):
+        return (datetime(year=meeting_date.year, month=meeting_date.month, day=meeting_date.day,
+                         hour=_startTime.hour)
+                if meeting_date is not None else _startTime) + timedelta(minutes=value * 30)
 
     @staticmethod
     def timeslot_to_str(value):
@@ -129,6 +132,23 @@ class Util:
             text = message.as_string()
             session.sendmail(sender, recipients, text)
             session.quit()
+
+    @staticmethod
+    def setup_logging(
+            default_path='logging.yaml',
+            default_level=logging.INFO
+    ):
+        """Setup logging configuration
+
+        """
+        path = default_path
+        if os.path.exists(path):
+            with open(path, 'rt') as f:
+                config = yaml.safe_load(f.read())
+            logging.config.dictConfig(config)
+        else:
+            print(f"Can't load {path}")
+            logging.basicConfig(level=default_level)
 
 
 class MeetingRequestError(Exception):

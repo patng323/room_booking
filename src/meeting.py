@@ -29,6 +29,7 @@ class Meeting:
     MAX_SIZE = 300  # TODO: temp
 
     def __init__(self, name, meetings,
+                 description='',
                  room=None,
                  room_id=None,
                  size=0, min_size=0,
@@ -40,6 +41,8 @@ class Meeting:
         self.unit = get_unit_from_name(name)  # 單位; e.g. 傷健科 : 尊主團
 
         self.__meetings = meetings  # Parent object
+
+        self.description = description
 
         self.room = room.strip() if room else None  # Pre-assigned room
         self.room_id = room_id
@@ -55,9 +58,8 @@ class Meeting:
 
         self.__start_timeslot = 0
         self.__duration = 0
-        self.__end_time = 0
         self.__meeting_times = None
-        self.id = None
+        self.id = None  # id in mrbs_entry in DB
 
         if start_timeslot is not None:
             assert duration > 0 and start_time is None and end_time is None

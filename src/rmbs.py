@@ -6,6 +6,10 @@ import csv
 import pandas as pd
 from datetime import datetime, date, timedelta
 import re
+import logging
+from util import Util
+
+logger = logging.getLogger(__name__)
 
 _queries = {
     "mrbs_area": '''
@@ -103,6 +107,7 @@ INSERT INTO mrbs_entry (start_time, end_time, entry_type, repeat_id, room_id, cr
 VALUES ({start_time}, {end_time}, 0, 0, 202,
 'administrator', convert(_latin1%s using utf8), 'I', convert(_latin1%s using utf8))'''
             cursor.execute(query, (name, description))
+            print(f'id={cursor.lastrowid}')
 
         connection.commit()
 
@@ -215,13 +220,55 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
 
         df2.to_sql('mrbs_facility', self._sqlEngine(), index=False, if_exists='append')
 
+    def insert_meetings(self, meetings_info, meeting_date: date):
+        connection = connect(host=self.host, user=self.user, password=self.password, db=self.database, charset='utf8')
+        try:
+            with connection.cursor() as cursor:
+                meeting_ids = []
+                for info in meetings_info:
+                    meeting = info['meeting']
+                    meeting_times = meeting.meeting_times
+                    start_time = Util.timeslot_to_dt(meeting_times[0], meeting_date)
+                    # In the DB, end_time is the beginning of the timeslot after the meeting
+                    end_time = Util.timeslot_to_dt(meeting_times[-1] + 1, meeting_date)
+
+                    room = info['room']
+                    if room.is_combined:
+                        room_ids = room.id
+                    else:
+                        room_ids = [room.id]
+
+                    for room_id in room_ids:
+                        new_id = self._insert_meeting(cursor, meeting.name, start_time, end_time, room_id,
+                                                      meeting.description)
+                        meeting_ids.append(new_id)
+        finally:
+            connection.close()
+
+        return meeting_ids
+
+    def _insert_meeting(self, cursor, name, start_time: datetime, end_time: datetime, room_id, description=''):
+        query = f'''
+INSERT INTO mrbs_entry (start_time, end_time, entry_type, repeat_id, room_id, create_by, name, type, description)
+VALUES ({_to_epoch(start_time)}, {_to_epoch(end_time)}, 0, 0, {room_id},
+'administrator', convert(_latin1%s using utf8), 'I', convert(_latin1%s using utf8))'''
+        logger.info(f'Adding meeting: start_time={start_time}, end_time={end_time}, room_id={room_id}, '
+                    f'name={name}, description={description}')
+        cursor.execute(query, (name, description))
+        id = cursor.lastrowid
+        logger.info(f'Meeting added, id={id}')
+
+        return id
+
 
 def _main():
     rmbs = Rmbs()
+    Util.setup_logging()
     #rmbs.insert_fac_data(Rmbs.Area_Truth, 'data/truth_fac_import.csv')
-    df = rmbs.read_facility()
-    print(df)
-    print('done')
+    #df = rmbs.read_facility()
+    #print(df)
+    #rmbs.test()
+    logger.info('done')
 
 
 if __name__ == "__main__":
