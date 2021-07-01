@@ -30,7 +30,9 @@ e.id, e.start_time, e.end_time, e.entry_type, e.repeat_id, e.room_id, e.timestam
 CONVERT(BINARY CONVERT(e.name USING latin1) USING utf8) as name,
 e.type,
 CONVERT(BINARY CONVERT(e.description USING latin1) USING utf8) as description,
-CONVERT(BINARY CONVERT(r.room_name USING latin1) USING utf8) as room
+CONVERT(BINARY CONVERT(r.room_name USING latin1) USING utf8) as room_name,
+CONVERT(BINARY CONVERT(r.description USING latin1) USING utf8) as room_description,
+r.capacity as room_capacity
 from mrbs_entry e join mrbs_room r on e.room_id = r.id ''',
 
     "mrbs_room": '''
@@ -86,6 +88,12 @@ class Rmbs:
     Area_Edu = 6
     Area_Truth2021 = 7
 
+    Areas = {
+        '康澤': Area_Hong,
+        '真理樓': Area_Truth,
+        '教育樓': Area_Edu
+    }
+
     def __init__(self):
         with open('config.yaml', 'r') as f:
             config = yaml.safe_load(f)["db"]
@@ -125,8 +133,13 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
             dbConnection.close()
 
     @staticmethod
-    def _massage_room_name(name):
+    def _massage_room_name(name, room_id):
         # Massage room name.  E.g. T 1 --> T1
+        if room_id == 145:
+            # T35 has two entries.  This one should be renamed
+            assert name == "T35"
+            name = "T35 (old)"
+
         return re.sub(r'^([A-Z]) (\d{1,2})$', r'\g<1>\g<2>', name).strip()
         
     def read_rooms(self, area: int):
@@ -134,7 +147,7 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
         try:
             # If capacity==0, we still read them; but they won't use them during auto-allocation due to its size
             df = pd.read_sql(_queries['mrbs_room'] + f'where area_id={area} order by room_name, capacity', dbConnection)
-            df['room_name'] = df['room_name'].apply(self._massage_room_name)
+            df['room_name'] = df.apply(lambda row: self._massage_room_name(row['room_name'], row['id']), axis=1)
 
             # Sometime the same room may appear twice, and we want to keep the one with the largest capacity.
             df = df.drop_duplicates(subset='room_name', keep="last")
@@ -155,7 +168,7 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
         finally:
             dbConnection.close()
 
-        df['room'] = df['room'].apply(self._massage_room_name)
+        df['room_name'] = df.apply(lambda row: self._massage_room_name(row['room_name'], row['room_id']), axis=1)
 
         return df
 
@@ -177,7 +190,7 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
                 query += f" where f.area_id={area}"
 
             df = pd.read_sql(query, dbConnection)
-            df['room_name'] = df['room_name'].apply(self._massage_room_name)
+            df['room_name'] = df.apply(lambda row: self._massage_room_name(row['room_name'], row['room_id']), axis=1)
         finally:
             dbConnection.close()
 
@@ -252,8 +265,8 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
 INSERT INTO mrbs_entry (start_time, end_time, entry_type, repeat_id, room_id, create_by, name, type, description)
 VALUES ({_to_epoch(start_time)}, {_to_epoch(end_time)}, 0, 0, {room_id},
 'administrator', convert(_latin1%s using utf8), 'I', convert(_latin1%s using utf8))'''
-        logger.info(f'Adding meeting: start_time={start_time}, end_time={end_time}, room_id={room_id}, '
-                    f'name={name}, description={description}')
+        logger.info(f'\nAdding meeting: start_time={start_time}, end_time={end_time}, room_id={room_id}, '
+                    f'name={name}, description=\n{description}\n---')
         cursor.execute(query, (name, description))
         id = cursor.lastrowid
         logger.info(f'Meeting added, id={id}')

@@ -9,7 +9,7 @@ import numpy as np
 
 
 def getid(meeting, timeslot, room):
-    return f"{meeting.name}({meeting.id})", timeslot, room.name
+    return f"{meeting.name}({meeting.meeting_times})({meeting.id})", timeslot, room.name
 
 
 class Site:
@@ -48,45 +48,57 @@ class Site:
         self.meetings = Meetings(site=self)
         self.meetings.load_meeting_requests(self.rmbs, self.area, meeting_date, ratio)  # Load meetings info from DB
         for m in self.meetings:
-            assert m.room is None or m.room in self.rooms.room_names, f"Room '{m.room}' is not found"
+            assert m.room_name is None or m.room_name in self.rooms.room_names, f"Room '{m.room_name}' is not found"
 
         self.detect_related_meetings()
         self._dateLoaded = meeting_date
 
-    def load_new_requests(self, path):
-        df = pd.read_csv(path)
-        print(f"Records read: {len(df)}")
+    def load_new_requests(self, path=None, df_requests=None):
+        if path:
+            df_requests = pd.read_csv(path)
+            print(f"Records read: {len(df_requests)}")
+        else:
+            assert df_requests is not None
 
         fac_types = self.rmbs.read_facility_types().query(f'area_id == {self.area}')['type'].to_list()
-        for request in df.itertuples():
+        for request in df_requests.itertuples():
             name = request.name
 
             if name.startswith("skip"):
                 print(f'Request {name} is skipped')
                 continue
 
-            start, end = Util.parse_time_field(request.time)
-            size, min_size = Util.parse_size(request.size)
-
-            facilities = request.facilities
-            if pd.isna(facilities):
-                facilities = None
+            if path:
+                # This is for reading the input file used during development for testing
+                start, end = Util.parse_time_field(request.time)
+                size, min_size = Util.parse_size(request.size)
+                description = ''
+                facilities = request.facilities
+                if pd.isna(facilities):
+                    facilities = None
+                else:
+                    facilities = facilities.split(",")
+                    facilities = [x.strip() for x in facilities]
+                    for fac in facilities:
+                        assert fac in fac_types, f"{name} requested facility {fac} is not found in DB"
             else:
-                facilities = facilities.split(",")
-                facilities = [x.strip() for x in facilities]
-                for fac in facilities:
-                    assert fac in fac_types, f"{name} requested facility {fac} is not found in DB"
+                start = request.startTime
+                end = request.stopTime
+                size = min_size = request.size
+                description = request.description
+                # TODO: facilities aren't available in the form right now
+                facilities = None
 
-            meeting = self.addMeeting(name, size, min_size=min_size, start_time=start, end_time=end,
+            meeting = self.addMeeting(name, size, description=description, min_size=min_size, start_time=start, end_time=end,
                                       facilities=facilities)
             self.requests.append(meeting)
 
     def detect_related_meetings(self):
         all_meetings = sorted(self.meetings._meetings, key=lambda m: m.name)  # TODO: WIP.  E.g. Two 連貫 meetings: 馬其頓團契練歌，馬其頓團契
 
-    def addMeeting(self, name, size, min_size=0, start_timeslot=None, start_time=None, end_time=None, duration=None,
-                   facilities=None):
-        meeting = Meeting(name=name, size=size, min_size=min_size, meetings=self.meetings,
+    def addMeeting(self, name, size, description='', min_size=0, start_timeslot=None, start_time=None, end_time=None,
+                   duration=None, facilities=None):
+        meeting = Meeting(name=name, description=description, size=size, min_size=min_size, meetings=self.meetings,
                           start_timeslot=start_timeslot, start_time=start_time, end_time=end_time, duration=duration,
                           facilities=facilities)
         self.meetings.add_meeting(meeting)
@@ -120,8 +132,8 @@ class Site:
                 name = meeting.name
                 if meeting.unit:
                     name += f" <{meeting.unit}>"
-                if meeting.room:
-                    name += f" : {meeting.room}"
+                if meeting.room_name:
+                    name += f" : {meeting.room_name}"
                 print(f"Meeting {name}: size={meeting.size}, timeslots={str(meeting.meeting_times)}")
 
         if print_rooms:
@@ -139,8 +151,8 @@ class Site:
                 ms = []
                 for m in self.timeslot_requests[t]:
                     name = m.name
-                    if m.room:
-                        name += f" : {m.room}"
+                    if m.room_name:
+                        name += f" : {m.room_name}"
 
                     ms.append(name)
 
@@ -157,20 +169,23 @@ class Site:
                 # Check if any 'fixed room' requests have conflict
                 room_booked_by = {}
                 for meeting in tr:
-                    if meeting.room:
-                        if meeting.room in room_booked_by:
+                    if meeting.room_name:
+                        if meeting.room_name in room_booked_by:
+                            existing_booking = room_booked_by[meeting.room_name]
                             msg = f"Timeslot {t} ({Util.timeslot_to_dt(t).strftime('%H:%M:%S')}): " + \
-                                  f"Room '{meeting.room}' is requested by both:\n" + \
-                                  f"'{room_booked_by[meeting.room]}'\n" + \
-                                  f"'{meeting.name}'"
+                                  f"Room '{meeting.room_name}' is requested by both:\n" + \
+                                  f"'{existing_booking.name} ({existing_booking.mrbs_entry_id})'\n" + \
+                                  f"'{meeting.name} ({meeting.mrbs_entry_id})'"
                             raise MeetingRequestError(msg,
                                                       {"code": self.CHECK_FIXED_ROOM_CONFLICT,
                                                        "timeslot": t,
-                                                       "room": meeting.room,
-                                                       "meeting1": room_booked_by[meeting.room],
-                                                       "meeting2": meeting.name})
+                                                       "room": meeting.room_name,
+                                                       "meeting1": existing_booking.name,
+                                                       "meeting1_id": existing_booking.mrbs_entry_id,
+                                                       "meeting2": meeting.name,
+                                                       "meeting2_id": meeting.mrbs_entry_id})
                         else:
-                            room_booked_by[meeting.room] = meeting.name
+                            room_booked_by[meeting.room_name] = meeting
 
                 if len(tr) > self.rooms.num_rooms:
                     msg = 'Too many meetings (total: {}) are booked at time {}'.format(len(tr), t)
@@ -236,12 +251,12 @@ class Site:
         for m in self.meetings:
             for t in self.timeslots:
                 if t in m.meeting_times:
-                    if m.room:
+                    if m.room_name:
                         # The meeting already has a room specified
                         room_found = False
                         for r in self.rooms:
-                            if m.room == r.name:
-                                model.Add(self.getBooking(bookings, model, m, t, self.rooms.get_room(m.room)) == 1)
+                            if m.room_name == r.name:
+                                model.Add(self.getBooking(bookings, model, m, t, self.rooms.get_room(m.room_name)) == 1)
                                 room_found = True
                                 break
 
@@ -277,7 +292,7 @@ class Site:
 
         # Facility checking
         for m in self.meetings:
-            if not m.room and m.facilities:  # The meeting isn't assigned a room yet, and it needs facility
+            if not m.room_name and m.facilities:  # The meeting isn't assigned a room yet, and it needs facility
                 for t in m.meeting_times:
                     for r in self.rooms:
                         room_has_all_needed_fac = all([needed_fac in r.facilities for needed_fac in m.facilities])
@@ -329,7 +344,7 @@ class Site:
                            for m in self.meetings
                            for t in self.timeslots
                            for r in self.rooms
-                           if getid(m, t, r) in bookings and m.room is None and not m.fixed)
+                           if getid(m, t, r) in bookings and m.room_name is None and not m.fixed)
 
         # Now call model.Minimize to minimize everything
         model.Minimize(sum(to_minimize))
@@ -365,7 +380,7 @@ class Site:
 
                         waste = r.room_cap - m.size
                         s = f'{m.name} ({m.size}) (-{waste})'
-                        if m.fixed or m.room:
+                        if m.fixed or m.room_name:
                             s += " *"  # Fixed, or has room specified in the request already
                         elif waste > 10:
                             print(f"Big waste detected: {Util.timeslot_to_str(t)} - {s}")

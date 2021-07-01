@@ -30,11 +30,12 @@ class Meeting:
 
     def __init__(self, name, meetings,
                  description='',
-                 room=None,
+                 room_name=None,
                  room_id=None,
                  size=0, min_size=0,
                  fixed=False,
                  facilities=None,
+                 mrbs_entry_id=None,
                  start_timeslot=None, duration=None,
                  start_time=None, end_time=None):
         self.name = name
@@ -44,8 +45,9 @@ class Meeting:
 
         self.description = description
 
-        self.room = room.strip() if room else None  # Pre-assigned room
+        self.room_name = room_name.strip() if room_name else None  # Pre-assigned room
         self.room_id = room_id
+        self.mrbs_entry_id = mrbs_entry_id
 
         self.__size = size
         # if the requested size is 8-10 ppl, then size=10, and minSize=8

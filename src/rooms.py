@@ -7,13 +7,15 @@ import math
 class Room:
     MAX_SIZE = 300  # TODO: temp
 
-    def __init__(self, room_cap=0, name=None, id=None, facilities=[], small_rooms=[], room_cap_ratio=2/3):
+    def __init__(self, room_cap=0, name=None, id=None, description=None, facilities=[], small_rooms=[],
+                 room_cap_ratio=2/3):
         self.room_cap_original = room_cap
         self.name = name
         self.facilities = facilities
         self.room_cap_ratio = room_cap_ratio
         self.small_rooms = small_rooms
         self.id = id  # It can be a list of ids if it's a combined room
+        self.description = description
 
     @property
     def room_cap(self):
@@ -40,7 +42,8 @@ class Rooms:
             assert info.room_name not in self._rooms_dict, f"same room ({info.room_name}) shouldn't appear from input"
 
             facilities = df_room_fac.query(f'room_id == {info.id}')['facility'].to_list()
-            room = Room(room_cap=info.capacity, name=info.room_name, id=info.id, facilities=facilities)
+            room = Room(room_cap=info.capacity, name=info.room_name, id=info.id, facilities=facilities,
+                        description=info.description)
             if info.capacity > self.max_cap:
                 self.max_cap = info.capacity
 

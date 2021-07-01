@@ -45,9 +45,10 @@ class Meetings:
             meeting = Meeting(name=name, meetings=self,
                               size=size, min_size=min_size,
                               fixed=fixed,
-                              room=request.room,
+                              room_name=request.room_name,
                               room_id=request.room_id,
-                              start_time=start, end_time=end)
+                              start_time=start, end_time=end,
+                              mrbs_entry_id=request.id)
 
             meeting.id = request.id  # ID is the meeting ID in DB
             self._meetings.append(meeting)
