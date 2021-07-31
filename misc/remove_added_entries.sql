@@ -1,2 +1,3 @@
 DELETE from mrbs.mrbs_entry 
-where id in (1733931, 1733932, 1733933, 1733934, 1733935)
+where id >= 1733936;
+#where id  in (1733936, 1733937, 1733938, 1733939, 1733940)

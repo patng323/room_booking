@@ -5,8 +5,7 @@ from ortools.sat.python import cp_model
 from datetime import datetime, date
 from util import Util, MeetingRequestError
 import pandas as pd
-import numpy as np
-
+from application import Application
 
 def getid(meeting, timeslot, room):
     return f"{meeting.name}({meeting.meeting_times})({meeting.id})", timeslot, room.name
@@ -62,14 +61,10 @@ class Site:
 
         fac_types = self.rmbs.read_facility_types().query(f'area_id == {self.area}')['type'].to_list()
         for request in df_requests.itertuples():
-            name = request.name
-
-            if name.startswith("skip"):
-                print(f'Request {name} is skipped')
-                continue
 
             if path:
                 # This is for reading the input file used during development for testing
+                name = request.name
                 start, end = Util.parse_time_field(request.time)
                 size, min_size = Util.parse_size(request.size)
                 description = ''
@@ -82,12 +77,17 @@ class Site:
                     for fac in facilities:
                         assert fac in fac_types, f"{name} requested facility {fac} is not found in DB"
             else:
-                start = request.startTime
-                end = request.stopTime
+                name = Application.to_event_name(request._asdict())
+                start = request.start_time
+                end = request.stop_time
                 size = min_size = request.size
-                description = request.description
+                description = Application.to_description(request._asdict())
                 # TODO: facilities aren't available in the form right now
                 facilities = None
+
+            if name.startswith("skip"):
+                print(f'Request {name} is skipped')
+                continue
 
             meeting = self.addMeeting(name, size, description=description, min_size=min_size, start_time=start, end_time=end,
                                       facilities=facilities)
@@ -512,6 +512,7 @@ class Site:
 
         Util.send_email("房間預約分配結果 - 失敗", html)
 
+
     def print_one_solution(self, solution):
         booking_allocated = set()
         for t in self.timeslots:
@@ -564,4 +565,39 @@ class Site:
         print('  - branches        : %i' % self._solver.NumBranches())
         print('  - wall time       : %f s' % self._solver.WallTime())
         print()
+
+    @staticmethod
+    def send_too_late_bookings_email(df_apps: pd.DataFrame):
+        df_apps = df_apps.fillna("").rename(
+            {"register_time": "交表時間",
+             "description": "申請詳情",
+             "event_site": "地點",
+             "event_date": "聚會日期",
+             "start_time": "開始時間",
+             "stop_time": "結束時間",
+             "size": "人數",
+             "application_file": "申請檔案"},
+            axis='columns'
+        )
+
+        table = df_apps.to_html(index=False, justify='left', border=1)
+
+        html = f"""\
+<html>
+  <head>
+    <style> 
+        body {{font-size:10p}}
+        table, th, td {{font-size:10pt; border:1px solid black; border-collapse:collapse; text-align:left;}}
+        th, td {{padding: 5px;}}
+    </style>
+  </head>
+  過來日子限期的申請
+  <br/><br/>
+  <body>
+  {table}
+  </body>
+</html>
+"""
+        Util.send_email("過來日子限期的申請", html)
+
 

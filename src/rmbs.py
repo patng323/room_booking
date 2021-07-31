@@ -74,6 +74,14 @@ def _to_epoch(dt):
     return int(dt.timestamp())
 
 
+def _to_datetime_str(dt):
+    return dt.strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _to_non_None_str(s):
+    return '' if s is None else s
+
+
 class Rmbs:
     # 1: 康澤
     # 2: 真理樓
@@ -233,6 +241,87 @@ VALUES ({start_time}, {end_time}, 0, 0, 202,
 
         df2.to_sql('mrbs_facility', self._sqlEngine(), index=False, if_exists='append')
 
+    def insert_application(self, app):
+        connection = connect(host=self.host, user=self.user, password=self.password, db=self.database,
+                             charset='utf8')
+        try:
+            with connection.cursor() as cursor:
+                # Add the application main info
+                now = datetime.now()
+                app_id = app['id']
+                query = f'''
+INSERT INTO mrbs_application (id, register_time, 
+size, phone_no, create_time,
+event_site,
+unit1,
+unit2,
+unit_title,
+subject,
+content,
+note,
+supplement1,
+in_charge
+)
+VALUES ("{app_id}", "{_to_datetime_str(app['register_time'])}",
+{app['size']}, "{app['phone_no']}", "{_to_datetime_str(now)}",
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8),
+convert(_latin1%s using utf8)
+)
+'''
+                cursor.execute(query, (
+                    _to_non_None_str(app.get('event_site', '')),
+                    _to_non_None_str(app.get('unit1', '')),
+                    _to_non_None_str(app.get('unit2', '')),
+                    _to_non_None_str(app.get('unit_title', '')),
+                    _to_non_None_str(app.get('subject', '')),
+                    _to_non_None_str(app.get('content', '')),
+                    _to_non_None_str(app.get('note', '')),
+                    _to_non_None_str(app.get('supplement1', '')),
+                    _to_non_None_str(app.get('in_charge', ''))
+                ))
+                logger.info(f'Appointment added, id={app_id}')
+
+                # Then add each entry
+                for entry in app['entries']:
+                    query = f'''
+INSERT INTO mrbs_application_entry (application_id, entry_no, event_date, start_time, stop_time, update_time, status)
+VALUES (
+'{app_id}', {entry['entry_no']}, "{entry['event_date']}", 
+"{_to_datetime_str(entry['start_time'])}", 
+"{_to_datetime_str(entry['stop_time'])}", 
+"{_to_datetime_str(now)}",
+"{entry['status']}"
+)
+'''
+                    cursor.execute(query)
+                    logger.info(f'Appointment Entry added, entry={entry["entry_no"]}')
+        finally:
+            connection.close()
+
+    def update_application_entry_status(self, application_id, entry_no, status):
+        connection = connect(host=self.host, user=self.user, password=self.password, db=self.database,
+                             charset='utf8')
+        try:
+            with connection.cursor() as cursor:
+                query = f'''
+UPDATE mrbs_application_entry
+SET
+    status = "{status}",
+    update_time = "{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+WHERE
+    application_id = "{application_id}" and entry_no={entry_no}
+'''
+                cursor.execute(query)
+        finally:
+            connection.close()
+
     def insert_meetings(self, meetings_info, meeting_date: date):
         connection = connect(host=self.host, user=self.user, password=self.password, db=self.database, charset='utf8')
         try:
@@ -272,7 +361,6 @@ VALUES ({_to_epoch(start_time)}, {_to_epoch(end_time)}, 0, 0, {room_id},
         logger.info(f'Meeting added, id={id}')
 
         return id
-
 
 def _main():
     rmbs = Rmbs()
